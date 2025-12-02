@@ -177,15 +177,15 @@
     <script type="importmap">
         {
             "imports": {
-            "three": "./libs/three.module.js",
-            "three/addons/": "./libs/"
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
         }
-    }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
-        import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
         // --- GLOBAL VARIABLES ---
         let camera, scene, renderer, controls;
