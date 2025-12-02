@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stechkom Software Demo v2.1</title>
+    <style>
+        /* Arayüz ve Stil Güncellemeleri */
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; user-select: none; background: #000; }
+        
+        /* UI Layer */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        
+        /* Crosshair */
+        #crosshair {
+            position: absolute; top: 50%; left: 50%;
+            width: 4px; height: 4px;
+            background: #ff0055;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 5px #ff0055;
+            transition: opacity 0.1s;
+        }
+        /* Hip-fire circle */
+        #crosshair::after {
+            content: ''; position: absolute; top: 50%; left: 50%;
+            width: 30px; height: 30px; 
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            transform: translate(-50%, -50%); border-radius: 50%;
+            transition: width 0.2s, height 0.2s, opacity 0.2s;
+        }
+        /* ADS State */
+        .aiming #crosshair { background: none; }
+        .aiming #crosshair::after { width: 10px; height: 10px; border-color: rgba(255, 255, 255, 0.9); }
+        .in-vehicle #crosshair { display: block; opacity: 0.7; } /* Araçta da nişangah görünsün */
+
+
+        /* HUD */
+        #score-box { 
+            position: absolute; top: 30px; left: 30px; 
+            color: #fff; font-size: 32px; font-weight: 900;
+            text-shadow: 2px 2px 0 #000;
+            font-family: 'Verdana', sans-serif;
+        }
+
+        #health-container {
+            position: absolute; bottom: 40px; left: 40px;
+            width: 300px; height: 15px;
+            background: rgba(0,0,0,0.5);
+            border: 2px solid #fff;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        #health-bar {
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, #00ff88, #00cc66); 
+            transition: width 0.2s ease-out;
+        }
+        
+        /* Vehicle Health HUD */
+        #vehicle-hud {
+            position: absolute; bottom: 40px; left: 40px;
+            width: 300px; padding: 10px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 18px;
+            font-weight: bold;
+            display: none; /* Varsayılan olarak gizli */
+        }
+        #vehicle-health-bar-container {
+            width: 100%; height: 10px; background: rgba(255,255,255,0.3); border-radius: 5px; margin-top: 5px;
+        }
+        #vehicle-health-bar {
+            height: 100%; width: 100%; background: #FFD700; transition: width 0.2s ease-out;
+        }
+
+
+        #ammo-box { 
+            position: absolute; bottom: 40px; right: 40px; 
+            color: #fff; font-size: 40px; font-weight: bold;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        /* Interaction Prompt */
+        #interaction-prompt {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) translateY(50px);
+            background: rgba(0, 0, 0, 0.8);
+            color: #FFD700;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+            z-index: 5;
+            pointer-events: none;
+            display: none;
+        }
+
+
+        /* Menu */
+        #blocker {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            /* Tropik Mavi/Yeşil Geçiş */
+            background: linear-gradient(to bottom, #1E90FF, #3CB371);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 10; pointer-events: auto;
+        }
+        
+        .menu-content { 
+            text-align: center; color: white; 
+            padding: 50px; 
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        h1 { 
+            font-size: 60px; margin: 0; 
+            color: #fff;
+            text-shadow: 0 5px 15px rgba(0,0,0,0.3); 
+            font-family: 'Impact', sans-serif;
+            letter-spacing: 5px;
+        }
+        h2 { font-weight: 300; margin-top: 10px; font-size: 20px; color: #e0f7fa; }
+        
+        .btn {
+            margin-top: 40px; padding: 15px 50px; font-size: 24px;
+            /* Turuncu/Güneş Batımı Rengi */
+            background: #FF9800; color: #fff; border: none; border-radius: 50px;
+            cursor: pointer; font-weight: bold; transition: transform 0.2s;
+            box-shadow: 0 5px 15px rgba(255, 152, 0, 0.4);
+        }
+        .btn:hover { transform: scale(1.1); background: #f57c00; }
+        
+        /* Damage Effect */
+        #damage-flash {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 50%, rgba(255,0,0,0.6) 100%);
+            opacity: 0; transition: opacity 0.2s; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="damage-flash"></div>
+
+    <div id="ui-layer">
+        <div id="crosshair"></div>
+        <div id="score-box">ÖLDÜRME: <span id="score">0</span></div>
+        <div id="health-container"><div id="health-bar"></div></div>
+        <div id="ammo-box">Sınırsız</div>
+        <div id="interaction-prompt">ARACA BİNMEK İÇİN [E] TUŞUNA BASIN</div>
+        
+        <!-- Yeni Araç Can Göstergesi -->
+        <div id="vehicle-hud">
+            ARAÇ CANI: 
+            <span id="vehicle-health-text">100%</span>
+            <div id="vehicle-health-bar-container">
+                <div id="vehicle-health-bar"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="blocker">
+        <div class="menu-content">
+            <h1>STECHKOM TROPICAL WAR</h1>
+            <h2>AMPHIBIOUS ASSAULT V2.1</h2>
+            <button class="btn" id="start-btn">SAVAŞI BAŞLAT</button>
+            <div style="margin-top:20px; font-size:14px; color:#eee;">
+                [W,A,S,D] Hareket • [SHIFT] Koş • [SPACE] Zıpla • [LMB] Ateş/Araç Silahı • [RMB] Nişan Al • [E] BİN/İN
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        // --- GLOBAL VARIABLES ---
+        let camera, scene, renderer, controls;
+        let raycaster;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let canJump = false, isSprinting = false, isAiming = false;
+        let prevTime = performance.now();
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        
+        // Kamera ve Silah Sabitleri
+        const HIP_FIRE_FOV = 75; 
+        const ADS_FOV = 40;      
+        const HIP_FIRE_POS = new THREE.Vector3(0.5, -0.6, -1.0); 
+        const ADS_POS = new THREE.Vector3(0, -0.5, -0.9);         
+        
+        let score = 0;
+        let health = 100;
+        let isGameOver = false;
+        let lastShotTime = 0;
+        
+        const enemies = [];
+        const deadEnemies = []; // Ölü düşmanlar (Ragdoll)
+        const particles = [];
+        const enemyBullets = []; 
+        const friendlyBullets = []; 
+        const colliders = []; 
+        const vehicles = []; 
+
+        // Vehicle Control
+        let currentVehicle = null;
+        const vehicleMove = new THREE.Vector3();
+        
+        // Settings - Tropical Mode
+        const ENEMY_SPEED = 6.0;
+        const ENEMY_SPAWN_RATE = 3000;
+        const BOAT_SPAWN_RATE = 15000;
+        const JEEP_SPAWN_RATE = 18000; 
+        const HELI_SPAWN_RATE = 25000;
+        const ENEMY_SHOOT_RANGE = 40;
+        let lastSpawnTime = 0;
+        let lastBoatSpawnTime = 0;
+        let lastJeepSpawnTime = 0;
+        let lastHeliSpawnTime = 0;
+        const WATER_LEVEL = -2;
+
+        let maxEnemies = 5; 
+        let enemiesKilledTotal = 0;
+
+        let gunMesh, muzzleLight;
+        let waterMesh;
+        let generatedTextures = {};
+
+
+        init();
+        animate();
+
+        // --- TEXTURE ENGINE (BRIGHT COLORS) ---
+        function createNoiseTexture(width, height, colorHex1, colorHex2) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            const c1 = new THREE.Color(colorHex1);
+            const c2 = new THREE.Color(colorHex2);
+            const imgData = ctx.createImageData(width, height);
+            
+            for (let i = 0; i < imgData.data.length; i += 4) {
+                const noise = Math.random();
+                imgData.data[i] = (c1.r * noise + c2.r * (1 - noise)) * 255;
+                imgData.data[i+1] = (c1.g * noise + c2.g * (1 - noise)) * 255;
+                imgData.data[i+2] = (c1.b * noise + c2.b * (1 - noise)) * 255;
+                imgData.data[i+3] = 255;
+            }
+            ctx.putImageData(imgData, 0, 0);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.minFilter = THREE.LinearMipMapLinearFilter;
+            return tex;
+        }
+
+        // --- PALM TREE MODEL ---
+        function createPalmTree(x, z) {
+            const group = new THREE.Group();
+            
+            const trunkGeo = new THREE.CylinderGeometry(1.0, 0.5, 15, 8);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, flatShading: true });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = 7.5;
+            trunk.castShadow = true;
+            trunk.receiveShadow = true;
+            group.add(trunk);
+            
+            const leafMat = new THREE.MeshStandardMaterial({ color: 0x006400, flatShading: true });
+            
+            for(let i=0; i<8; i++){
+                const leafGeo = new THREE.ConeGeometry(2, 10, 4); 
+                const leaf = new THREE.Mesh(leafGeo, leafMat);
+                leaf.position.y = 15;
+                leaf.rotation.x = -Math.PI / 4;
+                leaf.rotation.y = i * (Math.PI / 4);
+                
+                leaf.position.x += Math.cos(leaf.rotation.y) * 1.0; 
+                leaf.position.z += Math.sin(leaf.rotation.y) * 1.0;
+                leaf.rotation.z += (Math.random() - 0.5) * 0.2;
+                
+                group.add(leaf);
+            }
+            
+            const groundY = getTerrainHeight(x, z);
+            group.position.set(x, groundY, z);
+            group.rotation.y = Math.random() * Math.PI * 2;
+
+            scene.add(group);
+            colliders.push(trunk); 
+        }
+        
+        // --- DÜŞMAN SALDIRI BOTU MODELİ ---
+        function createAttackBoat(x, z) {
+            const group = new THREE.Group();
+            const boatMat = new THREE.MeshStandardMaterial({ color: 0x808080, roughness: 0.8, metalness: 0.2 });
+            const gunMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+
+            const hullGeo = new THREE.BoxGeometry(6, 1.5, 15);
+            const hull = new THREE.Mesh(hullGeo, boatMat);
+            hull.castShadow = true;
+            group.add(hull);
+            
+            const cabinGeo = new THREE.BoxGeometry(4, 2, 3);
+            const cabin = new THREE.Mesh(cabinGeo, boatMat);
+            cabin.position.set(0, 1.0, 3);
+            hull.add(cabin);
+
+            const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.5, 8), gunMat);
+            turret.position.set(0, 1.5, -5);
+            hull.add(turret);
+
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 5, 8), gunMat);
+            barrel.rotation.x = Math.PI / 2;
+            barrel.position.set(0, 0, -2.5);
+            turret.add(barrel);
+            
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 100 + Math.random() * 100;
+            const boatX = x + Math.cos(angle) * dist;
+            const boatZ = z + Math.sin(angle) * dist;
+
+            group.position.set(boatX, WATER_LEVEL + 0.5, boatZ);
+            
+            group.userData = {
+                type: 'boat',
+                hp: 500,
+                maxHp: 500, 
+                speed: 30,
+                isOccupied: false,
+                lastShotTime: 0,
+                turret: turret,
+                barrel: barrel,
+                driverSeat: new THREE.Vector3(0, 2.5, 4.5), 
+                velocity: new THREE.Vector3(0, 0, 0)
+            };
+            
+            scene.add(group);
+            vehicles.push(group);
+            colliders.push(hull); 
+        }
+        
+        // --- DÜŞMAN DEVRİYE ARACI (JEEP) ---
+        function createJeep(x, z) {
+            const group = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2E8B57, roughness: 0.7 }); 
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+            const gunMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+
+            const chassisGeo = new THREE.BoxGeometry(3.5, 1.5, 7);
+            const chassis = new THREE.Mesh(chassisGeo, bodyMat);
+            chassis.position.y = 1.0;
+            chassis.castShadow = true;
+            group.add(chassis);
+            
+            const topGeo = new THREE.BoxGeometry(3.3, 1.0, 4);
+            const top = new THREE.Mesh(topGeo, bodyMat);
+            top.position.set(0, 2.2, 0.5);
+            top.castShadow = true;
+            group.add(top);
+
+            const wheelGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.8, 16);
+            wheelGeo.rotateZ(Math.PI/2);
+            
+            const positions = [
+                {x: -1.8, y: 0.8, z: 2.5}, {x: 1.8, y: 0.8, z: 2.5},
+                {x: -1.8, y: 0.8, z: -2.5}, {x: 1.8, y: 0.8, z: -2.5}
+            ];
+            
+            positions.forEach(pos => {
+                const w = new THREE.Mesh(wheelGeo, wheelMat);
+                w.position.set(pos.x, pos.y, pos.z);
+                w.castShadow = true;
+                group.add(w);
+            });
+
+            const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.5, 8), gunMat);
+            turret.position.set(0, 3.0, 0); 
+            group.add(turret);
+
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 3, 8), gunMat);
+            barrel.rotation.x = Math.PI / 2;
+            barrel.position.set(0, 0, -1.5);
+            turret.add(barrel);
+            
+            let spawnX, spawnZ, spawnY;
+            let attempts = 0;
+            do {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 50 + Math.random() * 100;
+                spawnX = x + Math.cos(angle) * dist;
+                spawnZ = z + Math.sin(angle) * dist;
+                spawnY = getTerrainHeight(spawnX, spawnZ);
+                attempts++;
+            } while (spawnY < WATER_LEVEL + 2.0 && attempts < 50);
+
+            group.position.set(spawnX, spawnY + 0.5, spawnZ);
+            
+            group.userData = {
+                type: 'jeep',
+                hp: 400,
+                maxHp: 400, 
+                speed: 15,
+                isOccupied: false,
+                lastShotTime: 0,
+                turret: turret,
+                barrel: barrel,
+                driverSeat: new THREE.Vector3(0, 3.5, 0), // Kamera biraz daha yukarıda
+                velocity: new THREE.Vector3(0, 0, 0)
+            };
+            
+            scene.add(group);
+            vehicles.push(group);
+            colliders.push(chassis); 
+        }
+
+        // --- DÜŞMAN HELİKOPTER MODELİ ---
+        function createHelicopter(x, z) {
+            const group = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x303030, roughness: 0.5 }); 
+            const rotorMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+
+            const bodyGeo = new THREE.BoxGeometry(4, 2, 10);
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.castShadow = true;
+            group.add(body);
+
+            const tail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 5), bodyMat);
+            tail.position.set(0, 1, 7.5);
+            body.add(tail);
+
+            const mainRotor = new THREE.Group();
+            const bladeGeo = new THREE.BoxGeometry(0.5, 0.1, 10);
+            const blade1 = new THREE.Mesh(bladeGeo, rotorMat); blade1.position.y = 0.1; mainRotor.add(blade1);
+            const blade2 = new THREE.Mesh(bladeGeo, rotorMat); blade2.rotation.y = Math.PI/2; blade2.position.y = 0.1; mainRotor.add(blade2);
+            
+            mainRotor.position.set(0, 1.5, -2);
+            body.add(mainRotor);
+
+            group.position.set(x, 150, z);
+            group.rotation.y = Math.random() * Math.PI * 2;
+            
+            group.userData = {
+                type: 'helicopter',
+                hp: 800,
+                maxHp: 800, 
+                speed: 5,
+                rotor: mainRotor,
+                lastShotTime: 0,
+                targetY: 150 + Math.random() * 50, 
+                gunOffset: new THREE.Vector3(2, 0, -5) 
+            };
+            
+            scene.add(group);
+            vehicles.push(group);
+            colliders.push(body); 
+        }
+        
+        // --- INIT & LIGHTING (TROPIC) ---
+        function init() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0xaaddff, 0.002);
+            scene.background = new THREE.Color(0x87CEEB); 
+
+            camera = new THREE.PerspectiveCamera(HIP_FIRE_FOV, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.set(0, 10, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.8; 
+            document.body.appendChild(renderer.domElement);
+
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x555555, 1.2); 
+            hemiLight.position.set(0, 200, 0);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 2.5); 
+            dirLight.position.set(100, 300, 100);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 4096;
+            dirLight.shadow.mapSize.height = 4096;
+            dirLight.shadow.bias = -0.0001;
+            const d = 500;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            scene.add(dirLight);
+
+            const sunSprite = new THREE.Mesh(
+                new THREE.CircleGeometry(30, 32),
+                new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 0.9 })
+            );
+            sunSprite.position.copy(dirLight.position).normalize().multiplyScalar(900);
+            sunSprite.lookAt(0,0,0);
+            scene.add(sunSprite);
+
+            const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+            generatedTextures.ground = createNoiseTexture(512, 512, 0xfff8e1, 0xffe0b2); 
+            generatedTextures.ground.repeat.set(50, 50);
+            generatedTextures.ground.anisotropy = maxAnisotropy;
+
+            generatedTextures.water = createNoiseTexture(1024, 1024, 0x00e4ff, 0xbcf8ff); 
+            generatedTextures.water.repeat.set(10, 10);
+
+            createWater();
+            createTerrain();
+            createWeapon();
+            
+            for(let i=0; i<30; i++) {
+                let x, z;
+                do {
+                    x = (Math.random() - 0.5) * 400;
+                    z = (Math.random() - 0.5) * 400;
+                } while(getTerrainHeight(x, z) < WATER_LEVEL + 3);
+                createPalmTree(x, z);
+            }
+
+            controls = new PointerLockControls(camera, document.body);
+            const blocker = document.getElementById('blocker');
+            // START BUTTON: pointer lock dene; olmazsa yeni sekmede aç
+document.getElementById('start-btn').addEventListener('click', () => {
+    try {
+        controls.lock();
+
+        // 300 ms sonra hala kilitlenmediyse (iframe engellediyse) yeni sekme aç
+        setTimeout(() => {
+            if (!controls.isLocked) {
+                window.open(window.location.href, '_blank');
+            }
+        }, 300);
+    } catch (e) {
+        // Direkt hata verdiyse de yeni sekme aç
+        window.open(window.location.href, '_blank');
+    }
+});
+
+            controls.addEventListener('lock', () => { 
+                blocker.style.display = 'none'; 
+                if(isGameOver) resetGame(); 
+            });
+            controls.addEventListener('unlock', () => { blocker.style.display = 'flex'; });
+            scene.add(controls.getObject());
+
+            setupInputs();
+            raycaster = new THREE.Raycaster();
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function setupInputs() {
+            const onKey = (e, val) => {
+                switch (e.code) {
+                    case 'KeyW': moveForward = val; break;
+                    case 'KeyA': moveLeft = val; break;
+                    case 'KeyS': moveBackward = val; break;
+                    case 'KeyD': moveRight = val; break;
+                    case 'Space': if (!currentVehicle && val && canJump) { velocity.y += 22; canJump = false; } break;
+                    case 'ShiftLeft': isSprinting = val; break;
+                    case 'KeyE': if (val) handleInteraction(); break; 
+                }
+            };
+            document.addEventListener('keydown', (e) => onKey(e, true));
+            document.addEventListener('keyup', (e) => onKey(e, false));
+            
+            document.addEventListener('mousedown', (e) => {
+                if(!controls.isLocked) return;
+                if(e.button === 0) shoot(); 
+                if(e.button === 2) { // Araçtayken de nişan alma çalışsın
+                    isAiming = true;
+                    document.getElementById('ui-layer').classList.add('aiming');
+                }
+            });
+            document.addEventListener('mouseup', (e) => {
+                if(!controls.isLocked) return;
+                if(e.button === 2) {
+                    isAiming = false;
+                    document.getElementById('ui-layer').classList.remove('aiming');
+                }
+            });
+            document.addEventListener('contextmenu', (e) => e.preventDefault()); 
+        }
+
+        function handleInteraction() {
+            if(!controls.isLocked || isGameOver) return;
+
+            if(currentVehicle) {
+                exitVehicle();
+            } else {
+                const pPos = controls.getObject().position;
+                for (const vehicle of vehicles) {
+                    if ((vehicle.userData.type === 'boat' || vehicle.userData.type === 'jeep') && !vehicle.userData.isOccupied) {
+                        const dist = pPos.distanceTo(vehicle.position);
+                        if (dist < 10) { 
+                            enterVehicle(vehicle);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        
+        function enterVehicle(vehicle) {
+            currentVehicle = vehicle;
+            currentVehicle.userData.isOccupied = true;
+            
+            controls.getObject().visible = false;
+            gunMesh.visible = false;
+            
+            // Kamerayı araca yerleştir
+            camera.position.copy(currentVehicle.position).add(currentVehicle.userData.driverSeat);
+            
+            // PointerLock hala aktif ama biz manuel update yapacağız
+            
+            document.getElementById('ui-layer').classList.add('in-vehicle');
+            document.getElementById('vehicle-hud').style.display = 'block';
+            document.getElementById('health-container').style.display = 'none';
+            document.getElementById('ammo-box').style.display = 'none';
+            // Crosshair araçta kalsın
+            // document.getElementById('crosshair').style.display = 'none'; 
+            document.getElementById('interaction-prompt').style.display = 'none';
+        }
+        
+        function exitVehicle() {
+            if(!currentVehicle) return;
+            
+            const exitPoint = currentVehicle.position.clone();
+            const side = new THREE.Vector3(1, 0, 0).applyQuaternion(currentVehicle.quaternion);
+            exitPoint.add(side.multiplyScalar(5));
+            exitPoint.y = getTerrainHeight(exitPoint.x, exitPoint.z) + 3.0;
+            
+            controls.getObject().position.copy(exitPoint);
+            controls.getObject().rotation.set(0, 0, 0); // Rotasyonu sıfırla ki kafa karışmasın
+            
+            controls.getObject().visible = true;
+            gunMesh.visible = true;
+            
+            currentVehicle.userData.isOccupied = false;
+            currentVehicle = null;
+            
+            document.getElementById('ui-layer').classList.remove('in-vehicle');
+            document.getElementById('vehicle-hud').style.display = 'none';
+            document.getElementById('health-container').style.display = 'block';
+            document.getElementById('ammo-box').style.display = 'block';
+            document.getElementById('crosshair').style.display = 'block';
+        }
+
+        // --- TERRAIN ---
+        function getTerrainHeight(x, z) {
+            const scale1 = 0.015;
+            const h1 = (Math.sin(x * scale1) * Math.cos(z * scale1)) * 10;
+            const dist = Math.sqrt(x*x + z*z);
+            const islandShape = 40 * Math.exp(-0.00002 * dist * dist); 
+            
+            let y = islandShape + h1 - 12; 
+            return Math.max(y, WATER_LEVEL - 5);
+        }
+
+        function createTerrain() {
+            const geometry = new THREE.PlaneGeometry(1200, 1200, 256, 256);
+            geometry.rotateX(-Math.PI / 2);
+
+            const pos = geometry.attributes.position;
+            const colors = [];
+            
+            const cSand = new THREE.Color(0xFFF8E1); 
+            const cWetSand = new THREE.Color(0xE1D5A6);
+            const cGrass = new THREE.Color(0x32CD32); 
+            const cRock = new THREE.Color(0x808080);
+
+            for(let i=0; i<pos.count; i++){
+                const x = pos.getX(i);
+                const z = pos.getZ(i);
+                const y = getTerrainHeight(x, z);
+                pos.setY(i, y);
+
+                let color = new THREE.Color();
+                if (y < WATER_LEVEL + 0.5) color.copy(cWetSand); 
+                else if (y < 6) color.copy(cSand);
+                else if (y < 25) color.copy(cGrass);
+                else color.copy(cRock);
+
+                colors.push(color.r, color.g, color.b);
+            }
+            
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.computeVertexNormals();
+
+            const material = new THREE.MeshStandardMaterial({ 
+                vertexColors: true, 
+                map: generatedTextures.ground,
+                roughness: 0.9,
+                metalness: 0.0
+            });
+
+            const terrain = new THREE.Mesh(geometry, material);
+            terrain.receiveShadow = true;
+            terrain.castShadow = true;
+            scene.add(terrain);
+        }
+
+        // --- WATER ---
+        function createWater() {
+            const geometry = new THREE.PlaneGeometry(3000, 3000, 64, 64);
+            geometry.rotateX(-Math.PI / 2);
+            
+            const material = new THREE.MeshPhysicalMaterial({
+                color: 0x66FFFF, 
+                roughness: 0.05,
+                metalness: 0.1,
+                transmission: 0.8, 
+                opacity: 0.9,
+                transparent: true,
+                reflectivity: 0.9,
+                clearcoat: 1.0,
+                map: generatedTextures.water
+            });
+
+            waterMesh = new THREE.Mesh(geometry, material);
+            waterMesh.position.y = WATER_LEVEL;
+            scene.add(waterMesh);
+        }
+
+        // --- BULLET UTILITY FUNCTION ---
+        function createBullet(startPos, targetPos, isFriendly = false, isHeavy = false) {
+            const bulletGeo = new THREE.SphereGeometry(isHeavy ? 0.3 : 0.15, 8, 8);
+            const bulletMat = new THREE.MeshBasicMaterial({ color: isHeavy ? (isFriendly ? 0x00ff00 : 0xff0000) : 0xffff00 }); 
+            const bullet = new THREE.Mesh(bulletGeo, bulletMat);
+            
+            bullet.position.copy(startPos);
+
+            const dir = new THREE.Vector3().subVectors(targetPos, bullet.position).normalize();
+            
+            dir.x += (Math.random() - 0.5) * (isHeavy ? 0.02 : 0.05);
+            dir.y += (Math.random() - 0.5) * (isHeavy ? 0.02 : 0.05);
+            dir.z += (Math.random() - 0.5) * (isHeavy ? 0.02 : 0.05);
+            
+            bullet.userData = { 
+                velocity: dir.multiplyScalar(isHeavy ? 100 : 40), 
+                isFriendly: isFriendly,
+                isHeavy: isHeavy
+            };
+            
+            scene.add(bullet);
+            if (isFriendly) {
+                friendlyBullets.push(bullet);
+            } else {
+                enemyBullets.push(bullet);
+            }
+        }
+
+
+        // --- WEAPON & ENEMY MODELS ---
+        function createWeapon() {
+            gunMesh = new THREE.Group();
+            const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.3, metalness: 0.9 });
+            const greyMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.5, metalness: 0.6 });
+            
+            const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.3, 1.2), greyMat);
+            receiver.position.set(0, 0, 0);
+            gunMesh.add(receiver);
+
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.8), blackMat);
+            barrel.rotation.x = Math.PI/2; 
+            barrel.position.set(0, 0.05, -1.5); 
+            receiver.add(barrel);
+            
+            const handguard = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.25, 1.0), greyMat);
+            handguard.position.set(0, 0.05, -0.5);
+            receiver.add(handguard);
+
+            const stock = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.2, 0.7), blackMat);
+            stock.position.set(0, 0, 0.8);
+            receiver.add(stock);
+            
+            const mag = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.6, 0.25), blackMat);
+            mag.position.set(0, -0.35, 0.2); 
+            mag.rotation.x = 0.15; 
+            receiver.add(mag);
+
+            const sight = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.2), blackMat);
+            sight.position.set(0, 0.18, -0.4);
+            receiver.add(sight);
+
+            muzzleLight = new THREE.PointLight(0xffaa00, 0, 10);
+            muzzleLight.position.set(0, 0.1, -2.4); 
+            receiver.add(muzzleLight);
+
+            gunMesh.position.copy(HIP_FIRE_POS);
+            camera.add(gunMesh);
+        }
+
+        function createEnemy() {
+            if (isGameOver) return;
+            const group = new THREE.Group();
+
+            const skinMat = new THREE.MeshStandardMaterial({color: 0x8D5524, roughness: 0.8});
+            const shirtMat = new THREE.MeshStandardMaterial({color: 0x008000, roughness: 0.5}); 
+            const pantsMat = new THREE.MeshStandardMaterial({color: 0x4B3724, roughness: 0.7}); 
+
+            group.scale.set(1.6, 1.6, 1.6);
+            
+            const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.8, 0.3), pantsMat);
+            leftLeg.position.set(-0.16, 0.4, 0); 
+            leftLeg.castShadow = true; 
+            group.add(leftLeg);
+            
+            const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.8, 0.3), pantsMat);
+            rightLeg.position.set(0.16, 0.4, 0); 
+            rightLeg.castShadow = true; 
+            group.add(rightLeg);
+            
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.8, 0.4), shirtMat);
+            torso.position.y = 1.2; 
+            torso.castShadow = true; 
+            group.add(torso);
+
+            const armGeo = new THREE.BoxGeometry(0.2, 0.7, 0.2);
+            const leftArm = new THREE.Mesh(armGeo, shirtMat);
+            leftArm.position.set(-0.42, 1.25, 0); 
+            leftArm.castShadow = true; 
+            group.add(leftArm);
+            
+            const rightArm = new THREE.Mesh(armGeo, shirtMat);
+            rightArm.position.set(0.42, 1.25, 0); 
+            rightArm.castShadow = true; 
+            group.add(rightArm);
+
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.35, 0.3), skinMat);
+            head.position.y = 1.775; 
+            head.castShadow = true; 
+            group.add(head);
+
+            const eGun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 1.2), new THREE.MeshStandardMaterial({color:0x000000}));
+            eGun.position.set(0, 1.3, 0.6);
+            group.add(eGun);
+
+            let ex, ez, ey;
+            const pPos = currentVehicle ? currentVehicle.position : controls.getObject().position;
+
+            do {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 80 + Math.random() * 80;
+                ex = pPos.x + Math.cos(angle) * dist;
+                ez = pPos.z + Math.sin(angle) * dist;
+                ey = getTerrainHeight(ex, ez);
+            } while (ey < WATER_LEVEL + 3.0); 
+
+            group.position.set(ex, ey, ez);
+            
+            group.userData = { 
+                hp: 120,
+                speed: ENEMY_SPEED, 
+                lastShotTime: 0,
+                velocity: new THREE.Vector3(0,0,0),
+                type: 'foot'
+            };
+            
+            scene.add(group);
+            enemies.push(group);
+            colliders.push(torso); 
+            torso.userData.parentGroup = group;
+        }
+
+        // --- BULLET & DAMAGE FUNCTIONS ---
+        
+        function takeVehicleDamage(vehicle, damage) {
+            vehicle.userData.hp -= damage;
+            if(vehicle.userData.hp < 0) vehicle.userData.hp = 0;
+            
+            if (currentVehicle === vehicle) {
+                updateVehicleHUD(vehicle);
+            }
+
+            if(vehicle.userData.hp <= 0) {
+                createBloodEffect(vehicle.position.clone().add(new THREE.Vector3(0, 5, 0)), 100, 0xff0000);
+                
+                if(currentVehicle === vehicle) {
+                    exitVehicle(); 
+                    takeDamage(50); 
+                }
+                
+                scene.remove(vehicle);
+                vehicles.splice(vehicles.indexOf(vehicle), 1);
+            }
+        }
+
+        function shoot() {
+            if(!controls.isLocked || isGameOver) return;
+            const now = performance.now();
+            
+            if (currentVehicle) {
+                // Araç Silahı (Dost Ateşi)
+                const fireRate = 150;
+                if(now - lastShotTime < fireRate) return;
+                lastShotTime = now;
+                
+                const turret = currentVehicle.userData.turret;
+                const barrel = currentVehicle.userData.barrel;
+                const worldPos = new THREE.Vector3();
+                barrel.getWorldPosition(worldPos);
+                
+                // --- ARAÇTAN NİŞAN ALMA MANTIĞI DÜZELTİLDİ ---
+                // Kameranın baktığı yere raycast at, turret oraya dönsün, mermi oraya gitsin
+                raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+                // Kendi aracımızı raycast'ten hariç tutmamız gerek ama colliderlar listesinde ise sorun olabilir.
+                // En basiti, raycaster'ı uzak bir noktaya atmak.
+                
+                let targetPoint = new THREE.Vector3();
+                const intersects = raycaster.intersectObjects(colliders.filter(c => c !== currentVehicle), true); 
+                
+                if (intersects.length > 0) {
+                    targetPoint = intersects[0].point;
+                } else {
+                    targetPoint = raycaster.ray.at(500, targetPoint);
+                }
+
+                // Turret'i hedefe çevir (Sadece Y ekseninde değil, topyekün bakabilir veya kısıtlanabilir)
+                // Basitlik için turret hedefe baksın
+                turret.lookAt(targetPoint);
+                
+                createBullet(worldPos, targetPoint, true, true); 
+                
+                if(turret) {
+                    turret.rotateX(0.2); // Geri tepme
+                    setTimeout(() => turret.rotateX(-0.2), 100);
+                }
+
+            } else {
+                // Oyuncu Silahı (Raycast)
+                const fireRate = isAiming ? 150 : 100; 
+                if(now - lastShotTime < fireRate) return;
+                lastShotTime = now;
+
+                muzzleLight.intensity = 15;
+                setTimeout(() => muzzleLight.intensity = 0, 50);
+
+                const recoilKick = isAiming ? 0.1 : 0.3;
+                gunMesh.position.z += recoilKick; 
+                gunMesh.rotation.x += isAiming ? 0.03 : 0.08;
+
+                raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+                const intersects = raycaster.intersectObjects(colliders, true); 
+
+                if(intersects.length > 0) {
+                    const hitObj = intersects[0].object;
+                    let targetGroup = null;
+
+                    if (hitObj.userData.parentGroup) {
+                        targetGroup = hitObj.userData.parentGroup;
+                    } 
+                    else if (hitObj.parent && (hitObj.parent.userData.type === 'boat' || hitObj.parent.userData.type === 'helicopter' || hitObj.parent.userData.type === 'jeep')) {
+                        targetGroup = hitObj.parent;
+                    }
+                    
+                    if (targetGroup) {
+                        if (['boat', 'helicopter', 'jeep'].includes(targetGroup.userData.type)) {
+                            takeVehicleDamage(targetGroup, isAiming ? 50 : 35); 
+                            createBloodEffect(intersects[0].point, 10, 0x808080); 
+                        } else {
+                            // Piyade Hasarı
+                            const knockbackDir = new THREE.Vector3().subVectors(targetGroup.position, camera.position).normalize();
+                            targetGroup.userData.velocity.add(knockbackDir.multiplyScalar(5));
+                            targetGroup.userData.velocity.y += 3; 
+                            createBloodEffect(intersects[0].point, 30); 
+                            
+                            targetGroup.userData.hp -= isAiming ? 50 : 35; 
+                            
+                            if(targetGroup.userData.hp <= 0) {
+                                // --- RAGDOLL / ÖLÜM EFEKTİ ---
+                                createBloodEffect(targetGroup.position.clone().add(new THREE.Vector3(0, 1.5, 0)), 80);
+                                
+                                // Collider'ı kaldır
+                                const torsoIndex = colliders.indexOf(hitObj);
+                                if (torsoIndex > -1) { colliders.splice(torsoIndex, 1); }
+
+                                // Listeden çıkar, ölüler listesine ekle
+                                enemies.splice(enemies.indexOf(targetGroup), 1);
+                                deadEnemies.push({ mesh: targetGroup, deathTime: now });
+
+                                // Ragdoll hareketi: Geriye/Yana yatır
+                                targetGroup.rotation.x = -Math.PI / 2; // Yere yat
+                                targetGroup.position.y -= 1.0; // Biraz aşağı indir
+
+                                score++;
+                                enemiesKilledTotal++;
+                                document.getElementById('score').innerText = score;
+
+                                if (enemiesKilledTotal % 5 === 0) {
+                                    maxEnemies++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function createBloodEffect(pos, count = 10, color=0x880000) {
+            for(let i=0; i<count; i++) {
+                const p = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.1), new THREE.MeshBasicMaterial({color:color})); 
+                p.position.copy(pos);
+                p.userData.vel = new THREE.Vector3((Math.random()-0.5)*10, Math.random()*10, (Math.random()-0.5)*10);
+                p.userData.age = 0;
+                scene.add(p);
+                particles.push(p);
+            }
+        }
+
+        function takeDamage(damage = 10) {
+            if(isGameOver) return;
+            health -= damage; 
+            if(health < 0) health = 0;
+            document.getElementById('health-bar').style.width = health + '%';
+            
+            const flash = document.getElementById('damage-flash');
+            flash.style.opacity = 1; setTimeout(() => flash.style.opacity = 0, 200);
+            
+            if(health <= 0) {
+                isGameOver = true;
+                controls.unlock();
+                document.querySelector('h1').innerText = "ÖLDÜN!";
+                document.getElementById('interaction-prompt').style.display = 'none';
+            }
+        }
+
+        function resetGame() {
+            health = 100; score = 0; isGameOver = false; maxEnemies = 5; enemiesKilledTotal = 0;
+            document.getElementById('health-bar').style.width = '100%';
+            document.getElementById('score').innerText = '0';
+            enemies.forEach(e => scene.remove(e)); enemies.length = 0; 
+            deadEnemies.forEach(d => scene.remove(d.mesh)); deadEnemies.length = 0;
+            colliders.length = 0;
+            enemyBullets.forEach(b => scene.remove(b)); enemyBullets.length = 0;
+            friendlyBullets.forEach(b => scene.remove(b)); friendlyBullets.length = 0; 
+            vehicles.forEach(v => scene.remove(v)); vehicles.length = 0;
+            currentVehicle = null;
+            controls.getObject().position.set(0, 20, 0);
+            velocity.set(0,0,0);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function updateVehicleHUD(vehicle) {
+            const hp = vehicle.userData.hp;
+            const maxHp = vehicle.userData.maxHp;
+            const percentage = (hp / maxHp) * 100;
+            
+            document.getElementById('vehicle-health-bar').style.width = percentage + '%';
+            document.getElementById('vehicle-health-text').innerText = `${Math.round(hp)} / ${maxHp}`;
+        }
+
+        // --- ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now();
+            const delta = (time - prevTime) / 1000;
+            prevTime = time;
+
+            if(!controls.isLocked) return;
+
+            // --- PLAYER / VEHICLE CONTROL ---
+            if(currentVehicle) {
+                // Vehicle Control
+                updateVehicleHUD(currentVehicle);
+
+                // Vehicle Input
+                vehicleMove.set(0, 0, 0);
+                if (moveForward) vehicleMove.z -= 1;
+                if (moveBackward) vehicleMove.z += 1;
+                
+                const rotSpeed = currentVehicle.userData.type === 'jeep' ? 1.5 : 0.8;
+                if (moveRight) currentVehicle.rotation.y -= delta * rotSpeed;
+                if (moveLeft) currentVehicle.rotation.y += delta * rotSpeed;
+                
+                const forward = new THREE.Vector3(0, 0, vehicleMove.z).applyQuaternion(currentVehicle.quaternion);
+                const nextPos = currentVehicle.position.clone().add(forward.multiplyScalar(currentVehicle.userData.speed * delta));
+                const groundH = getTerrainHeight(nextPos.x, nextPos.z);
+                
+                if (currentVehicle.userData.type === 'jeep') {
+                    // --- JEEP FİZİK DÜZELTMESİ ---
+                    if (groundH < WATER_LEVEL) {
+                        // Suya girmesin
+                    } else {
+                         currentVehicle.position.copy(nextPos);
+                         // Yere sıkı yapışma (Havada uçmayı engelleme)
+                         currentVehicle.position.y = getTerrainHeight(currentVehicle.position.x, currentVehicle.position.z) + 1.0; 
+                         
+                         // Eğim
+                         const frontPos = nextPos.clone().add(forward.clone().multiplyScalar(2));
+                         const backPos = nextPos.clone().sub(forward.clone().multiplyScalar(2));
+                         const h1 = getTerrainHeight(frontPos.x, frontPos.z);
+                         const h2 = getTerrainHeight(backPos.x, backPos.z);
+                         currentVehicle.rotation.x = Math.atan2(h2 - h1, 4);
+                    }
+                } else if (currentVehicle.userData.type === 'boat') {
+                    if (groundH > WATER_LEVEL + 0.5) {
+                        // Karaya çıkmasın
+                    } else {
+                        currentVehicle.position.copy(nextPos);
+                        currentVehicle.rotation.z = Math.sin(time * 0.005) * 0.05;
+                        currentVehicle.position.y = WATER_LEVEL + 0.5 + Math.sin(time * 0.003) * 0.1;
+                    }
+                }
+
+                // Kamerayı araca sabitle ama rotasyon serbest kalsın (PointerLock kontrol ediyor)
+                camera.position.copy(currentVehicle.position).add(currentVehicle.userData.driverSeat.clone().applyQuaternion(currentVehicle.quaternion));
+                
+                // Turret'i nişan alınan yere çevir (Görsel geri bildirim için)
+                raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+                let targetPoint = raycaster.ray.at(100, new THREE.Vector3());
+                const intersects = raycaster.intersectObjects(colliders, true);
+                if(intersects.length > 0) targetPoint = intersects[0].point;
+                
+                if(currentVehicle.userData.turret) {
+                    currentVehicle.userData.turret.lookAt(targetPoint);
+                }
+
+            } else {
+                // Player Control
+                const currentSpeed = isSprinting ? 120.0 : 60.0;
+                const dampingFactor = isAiming ? 15.0 : 10.0;
+
+                velocity.x -= velocity.x * dampingFactor * delta;
+                velocity.z -= velocity.z * dampingFactor * delta;
+                velocity.y -= 50.0 * delta; 
+
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+
+                if (moveForward || moveBackward) velocity.z -= direction.z * currentSpeed * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * currentSpeed * delta;
+
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+                
+                const pPos = controls.getObject().position;
+                const groundH = getTerrainHeight(pPos.x, pPos.z);
+                
+                if (pPos.y < groundH + 3.0) { velocity.y = 0; pPos.y = groundH + 3.0; canJump = true; }
+                controls.getObject().position.y += velocity.y * delta;
+                
+                let nearbyVehicle = null;
+                for (const vehicle of vehicles) {
+                    if (!vehicle.userData.isOccupied && (vehicle.userData.type === 'boat' || vehicle.userData.type === 'jeep')) {
+                        const dist = pPos.distanceTo(vehicle.position);
+                        if (dist < 10) { 
+                            nearbyVehicle = vehicle;
+                            break;
+                        }
+                    }
+                }
+                document.getElementById('interaction-prompt').style.display = nearbyVehicle ? 'block' : 'none';
+            }
+
+
+            // --- CAMERA / WEAPON LOGIC ---
+            if(!currentVehicle) {
+                camera.fov = THREE.MathUtils.lerp(camera.fov, isAiming ? ADS_FOV : HIP_FIRE_FOV, 0.1);
+                camera.updateProjectionMatrix();
+                gunMesh.position.lerp(isAiming ? ADS_POS : HIP_FIRE_POS, 0.2);
+                
+                if(!isAiming && (Math.abs(velocity.x) > 1 || Math.abs(velocity.z) > 1)) {
+                    const bobFreq = isSprinting ? 0.018 : 0.012;
+                    const bobAmp = isSprinting ? 0.05 : 0.02;
+                    gunMesh.position.y = (isAiming ? ADS_POS.y : HIP_FIRE_POS.y) + Math.sin(time * bobFreq) * bobAmp;
+                    gunMesh.position.x = (isAiming ? ADS_POS.x : HIP_FIRE_POS.x) + Math.cos(time * 0.007) * 0.03;
+                } else if(!isAiming) {
+                     gunMesh.position.y = THREE.MathUtils.lerp(gunMesh.position.y, HIP_FIRE_POS.y, 0.1);
+                     gunMesh.position.x = THREE.MathUtils.lerp(gunMesh.position.x, HIP_FIRE_POS.x, 0.1);
+                }
+                gunMesh.rotation.x = THREE.MathUtils.lerp(gunMesh.rotation.x, 0, 0.15);
+                const targetZ = isAiming ? ADS_POS.z : HIP_FIRE_POS.z;
+                gunMesh.position.z = THREE.MathUtils.lerp(gunMesh.position.z, targetZ, 0.15);
+            }
+
+            // --- WATER MOVEMENT ---
+            if(waterMesh) {
+                generatedTextures.water.offset.x += delta * 0.01; 
+                generatedTextures.water.offset.y += delta * 0.005; 
+                waterMesh.position.y = WATER_LEVEL + Math.sin(time * 0.001) * 0.2;
+            }
+
+            // --- SPAWN LOGIC ---
+            const pPos = currentVehicle ? currentVehicle.position : controls.getObject().position;
+
+            if(time - lastSpawnTime > ENEMY_SPAWN_RATE && enemies.length < maxEnemies) { 
+                createEnemy(); lastSpawnTime = time;
+            }
+            
+            if(time - lastBoatSpawnTime > BOAT_SPAWN_RATE && vehicles.filter(v => v.userData.type === 'boat').length < 3) {
+                createAttackBoat(pPos.x, pPos.z); lastBoatSpawnTime = time;
+            }
+
+            if(time - lastJeepSpawnTime > JEEP_SPAWN_RATE && vehicles.filter(v => v.userData.type === 'jeep').length < 2) {
+                createJeep(pPos.x, pPos.z); lastJeepSpawnTime = time;
+            }
+            
+            if(time - lastHeliSpawnTime > HELI_SPAWN_RATE && vehicles.filter(v => v.userData.type === 'helicopter').length < 1) {
+                createHelicopter(pPos.x, pPos.z); lastHeliSpawnTime = time;
+            }
+
+            // --- ENEMY LOGIC ---
+            for(let i = enemies.length-1; i>=0; i--) {
+                const enemy = enemies[i];
+                const userData = enemy.userData;
+                const dx = pPos.x - enemy.position.x;
+                const dz = pPos.z - enemy.position.z;
+                const dist = Math.sqrt(dx*dx + dz*dz);
+                
+                userData.velocity.y -= 50.0 * delta; 
+                userData.velocity.multiplyScalar(0.9); 
+                enemy.position.addScaledVector(userData.velocity, delta);
+
+                const groundH = getTerrainHeight(enemy.position.x, enemy.position.z);
+                if (enemy.position.y < groundH) { userData.velocity.y = 0; enemy.position.y = groundH; }
+                
+                enemy.lookAt(pPos.x, enemy.position.y, pPos.z);
+
+                if (dist > ENEMY_SHOOT_RANGE) {
+                    const moveDist = userData.speed * delta * 1.5;
+                    const forwardDir = new THREE.Vector3(0, 0, 1).applyEuler(enemy.rotation);
+                    const projectedPos = enemy.position.clone().add(forwardDir.multiplyScalar(moveDist));
+                    
+                    if(getTerrainHeight(projectedPos.x, projectedPos.z) > WATER_LEVEL + 1.0) {
+                        enemy.translateZ(moveDist);
+                    }
+                } else if (dist > 15) {
+                    const moveDist = userData.speed * delta * 0.5;
+                    const forwardDir = new THREE.Vector3(0, 0, 1).applyEuler(enemy.rotation);
+                    const projectedPos = enemy.position.clone().add(forwardDir.multiplyScalar(moveDist));
+
+                     if(getTerrainHeight(projectedPos.x, projectedPos.z) > WATER_LEVEL + 1.0) {
+                        enemy.translateZ(moveDist);
+                    }
+
+                    if (time - userData.lastShotTime > 2000) { 
+                        createBullet(enemy.position.clone().add(new THREE.Vector3(0, 1.5, 0)), pPos, false, false); 
+                        userData.lastShotTime = time;
+                    }
+                } else {
+                    if (time - userData.lastShotTime > 1000) {
+                        createBullet(enemy.position.clone().add(new THREE.Vector3(0, 1.5, 0)), pPos, false, false); 
+                        userData.lastShotTime = time;
+                    }
+                }
+            }
+
+            // --- DEAD ENEMIES CLEANUP (RAGDOLL) ---
+            for(let i = deadEnemies.length-1; i>=0; i--) {
+                const dead = deadEnemies[i];
+                if (time - dead.deathTime > 2000) { // 2 saniye sonra sil
+                    scene.remove(dead.mesh);
+                    deadEnemies.splice(i, 1);
+                }
+            }
+            
+            // --- VEHICLE AI ---
+            for(let i = vehicles.length - 1; i >= 0; i--) {
+                const vehicle = vehicles[i];
+                const userData = vehicle.userData;
+                
+                // --- HELIKOPTER PERVANELERİ HER ZAMAN DÖNSÜN ---
+                if (userData.type === 'helicopter') {
+                    userData.rotor.rotation.y += delta * 20; // Hızlı dönme
+                }
+                
+                if (!userData.isOccupied) {
+                    if (userData.type === 'boat') {
+                        // BOAT AI logic... (Aynı kaldı)
+                        const forwardDir = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicle.quaternion);
+                        const checkPos = vehicle.position.clone().add(forwardDir.multiplyScalar(20));
+                        if (getTerrainHeight(checkPos.x, checkPos.z) > WATER_LEVEL) {
+                            vehicle.rotation.y += delta * 2.0; 
+                        } else {
+                            const targetAngle = Math.atan2(pPos.x - vehicle.position.x, pPos.z - vehicle.position.z);
+                            let diff = targetAngle - vehicle.rotation.y;
+                            while (diff < -Math.PI) diff += Math.PI * 2;
+                            while (diff > Math.PI) diff -= Math.PI * 2;
+                            vehicle.rotation.y += diff * delta * 0.5;
+                        }
+                        vehicle.translateZ(userData.speed * delta * 0.5);
+                        vehicle.position.y = WATER_LEVEL + 0.5 + Math.sin(time * 0.003) * 0.1; 
+                        
+                        const dist = vehicle.position.distanceTo(pPos);
+                        if (dist < 200 && time - userData.lastShotTime > 3000) {
+                            const worldPos = new THREE.Vector3();
+                            userData.barrel.getWorldPosition(worldPos);
+                            createBullet(worldPos, pPos, false, true); 
+                            userData.lastShotTime = time;
+                        }
+                        userData.turret.lookAt(pPos);
+
+                    } else if (userData.type === 'jeep') {
+                        // JEEP AI
+                        const groundH = getTerrainHeight(vehicle.position.x, vehicle.position.z);
+                        vehicle.position.y = groundH + 1.0;
+
+                        const forwardDir = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicle.quaternion);
+                        const frontPos = vehicle.position.clone().add(forwardDir.clone().multiplyScalar(2));
+                        const backPos = vehicle.position.clone().sub(forwardDir.clone().multiplyScalar(2));
+                        const h1 = getTerrainHeight(frontPos.x, frontPos.z);
+                        const h2 = getTerrainHeight(backPos.x, backPos.z);
+                        vehicle.rotation.x = Math.atan2(h2 - h1, 4);
+
+                        const checkPos = vehicle.position.clone().add(forwardDir.multiplyScalar(15));
+                        if (getTerrainHeight(checkPos.x, checkPos.z) < WATER_LEVEL) {
+                            vehicle.rotation.y += delta * 2.0;
+                        } else {
+                             const targetAngle = Math.atan2(pPos.x - vehicle.position.x, pPos.z - vehicle.position.z);
+                             let diff = targetAngle - vehicle.rotation.y;
+                             while (diff < -Math.PI) diff += Math.PI * 2;
+                             while (diff > Math.PI) diff -= Math.PI * 2;
+                             vehicle.rotation.y += diff * delta * 1.0;
+                        }
+                        vehicle.translateZ(userData.speed * delta * 0.8);
+
+                        const dist = vehicle.position.distanceTo(pPos);
+                        if (dist < 150 && time - userData.lastShotTime > 2000) {
+                            const worldPos = new THREE.Vector3();
+                            userData.barrel.getWorldPosition(worldPos);
+                            createBullet(worldPos, pPos, false, true);
+                            userData.lastShotTime = time;
+                        }
+                        userData.turret.lookAt(pPos);
+                    }
+                    
+                } else if (userData.type === 'helicopter') {
+                    // HELICOPTER AI
+                    // Pervane zaten yukarıda dönüyor
+                    const targetAngle = Math.atan2(pPos.x - vehicle.position.x, pPos.z - vehicle.position.z);
+                    vehicle.rotation.y = THREE.MathUtils.lerp(vehicle.rotation.y, targetAngle, 0.01);
+                    vehicle.position.y = THREE.MathUtils.lerp(vehicle.position.y, userData.targetY, 0.01);
+                    vehicle.translateZ(userData.speed * delta);
+                    
+                    const dist = vehicle.position.distanceTo(pPos);
+                    if (dist < 400 && time - userData.lastShotTime > 1500) {
+                        const worldPos = vehicle.position.clone().add(userData.gunOffset);
+                        createBullet(worldPos, pPos, false, true); 
+                        userData.lastShotTime = time;
+                    }
+                }
+            }
+            
+            // --- FRIENDLY BULLET COLLISION ---
+            for(let i=friendlyBullets.length-1; i>=0; i--) {
+                const b = friendlyBullets[i];
+                b.position.addScaledVector(b.userData.velocity, delta);
+                
+                const bulletPos = b.position;
+                let collided = false;
+                
+                const hostileTargets = [...enemies, ...vehicles.filter(v => v !== currentVehicle)];
+                
+                for (const target of hostileTargets) {
+                    const dist = bulletPos.distanceTo(target.position);
+                    let hitRange = target.userData.type === 'foot' ? 2.0 : 5.0; 
+                    let isVehicleTarget = ['boat', 'helicopter', 'jeep'].includes(target.userData.type);
+
+                    if(dist < hitRange) {
+                        if (isVehicleTarget) {
+                            takeVehicleDamage(target, b.userData.isHeavy ? 100 : 50); 
+                            createBloodEffect(bulletPos, 15, 0x808080); 
+                        } else { 
+                            target.userData.hp -= b.userData.isHeavy ? 80 : 40; 
+                            createBloodEffect(bulletPos, 40); 
+                            target.userData.velocity.y += 5; 
+                            
+                            if(target.userData.hp <= 0) {
+                                // RAGDOLL LOGIC DUPLICATED HERE FOR FRIENDLY FIRE
+                                createBloodEffect(bulletPos, 80);
+                                const torsoIndex = colliders.indexOf(target); // Düşman target bir gruptur, collider değil.
+                                // Piyade için 'target' bir group. Collider ise torso.
+                                // Basitçe:
+                                const tIndex = colliders.findIndex(c => c.userData.parentGroup === target);
+                                if(tIndex > -1) colliders.splice(tIndex, 1);
+
+                                enemies.splice(enemies.indexOf(target), 1);
+                                deadEnemies.push({ mesh: target, deathTime: time });
+                                target.rotation.x = -Math.PI / 2;
+                                target.position.y -= 1.0;
+
+                                score++;
+                                enemiesKilledTotal++;
+                                document.getElementById('score').innerText = score;
+                                if (enemiesKilledTotal % 5 === 0) maxEnemies++;
+                            }
+                        }
+                        collided = true;
+                        break;
+                    }
+                }
+                
+                const groundH = getTerrainHeight(bulletPos.x, bulletPos.z);
+                if (bulletPos.y < groundH + 1.0 || bulletPos.y < WATER_LEVEL) {
+                     createBloodEffect(bulletPos, 5, 0x808080);
+                     collided = true;
+                }
+                
+                if (collided || bulletPos.distanceTo(pPos) > 1000) {
+                    scene.remove(b);
+                    friendlyBullets.splice(i, 1);
+                }
+            }
+
+
+            // --- ENEMY BULLET COLLISION ---
+            for(let i=enemyBullets.length-1; i>=0; i--) {
+                const b = enemyBullets[i];
+                b.position.addScaledVector(b.userData.velocity, delta);
+                
+                const bulletPos = b.position;
+                let collided = false;
+
+                if (currentVehicle) {
+                    const distToVehicle = bulletPos.distanceTo(currentVehicle.position);
+                    if (distToVehicle < 5.0) { 
+                        takeVehicleDamage(currentVehicle, b.userData.isHeavy ? 20 : 10); 
+                        collided = true;
+                    }
+                } else {
+                    const distToPlayer = bulletPos.distanceTo(controls.getObject().position);
+                    if(distToPlayer < 2.0) {
+                        takeDamage(b.userData.isHeavy ? 30 : 10); 
+                        collided = true;
+                    }
+                }
+                
+                const groundH = getTerrainHeight(bulletPos.x, bulletPos.z);
+                if (bulletPos.y < groundH + 1.0 || bulletPos.y < WATER_LEVEL) {
+                     createBloodEffect(bulletPos, 5, 0x808080); 
+                     collided = true;
+                }
+                
+                if (collided || bulletPos.distanceTo(pPos) > 1000) {
+                    scene.remove(b);
+                    enemyBullets.splice(i, 1);
+                }
+            }
+
+            // --- PARTICLES ---
+            for(let i=particles.length-1; i>=0; i--) {
+                const p = particles[i];
+                p.position.addScaledVector(p.userData.vel, delta);
+                p.userData.vel.y -= 10 * delta; 
+                p.scale.multiplyScalar(0.9);
+                if(p.scale.x < 0.01) { scene.remove(p); particles.splice(i, 1); }
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
