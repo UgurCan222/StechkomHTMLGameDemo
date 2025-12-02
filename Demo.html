@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stechkom Software Demo v2.1</title>
+    <title>Stechkom Software Demo v2.3 - Fixed Assets</title>
     <style>
         /* Arayüz ve Stil Güncellemeleri */
         body { margin: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; user-select: none; background: #000; }
@@ -166,7 +166,7 @@
     <div id="blocker">
         <div class="menu-content">
             <h1>STECHKOM TROPICAL WAR</h1>
-            <h2>AMPHIBIOUS ASSAULT V2.1</h2>
+            <h2>AMPHIBIOUS ASSAULT V2.3 (Fixed)</h2>
             <button class="btn" id="start-btn">SAVAŞI BAŞLAT</button>
             <div style="margin-top:20px; font-size:14px; color:#eee;">
                 [W,A,S,D] Hareket • [SHIFT] Koş • [SPACE] Zıpla • [LMB] Ateş/Araç Silahı • [RMB] Nişan Al • [E] BİN/İN
@@ -200,7 +200,7 @@
         const HIP_FIRE_FOV = 75; 
         const ADS_FOV = 40;      
         const HIP_FIRE_POS = new THREE.Vector3(0.5, -0.6, -1.0); 
-        const ADS_POS = new THREE.Vector3(0, -0.5, -0.9);         
+        const ADS_POS = new THREE.Vector3(0, -0.49, -0.4); // ADS pozisyonu      
         
         let score = 0;
         let health = 100;
@@ -268,33 +268,79 @@
             return tex;
         }
 
-        // --- PALM TREE MODEL ---
+        // --- PALM TREE MODEL (REWORKED: Big Lush Leaves) ---
         function createPalmTree(x, z) {
             const group = new THREE.Group();
             
-            const trunkGeo = new THREE.CylinderGeometry(1.0, 0.5, 15, 8);
-            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, flatShading: true });
+            // Gövde
+            const trunkGeo = new THREE.CylinderGeometry(0.7, 1.1, 14, 8);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 });
             const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-            trunk.position.y = 7.5;
+            trunk.position.y = 7;
+            // Hafif eğim
+            trunk.rotation.z = (Math.random() - 0.5) * 0.3;
             trunk.castShadow = true;
             trunk.receiveShadow = true;
             group.add(trunk);
             
-            const leafMat = new THREE.MeshStandardMaterial({ color: 0x006400, flatShading: true });
+            // Yapraklar (Bütünleşik ve Kıvrımlı Plane)
+            const leafColor = 0x228B22;
+            const leafMat = new THREE.MeshStandardMaterial({ 
+                color: leafColor, 
+                roughness: 0.8,
+                side: THREE.DoubleSide 
+            });
             
-            for(let i=0; i<8; i++){
-                const leafGeo = new THREE.ConeGeometry(2, 10, 4); 
+            const leavesGroup = new THREE.Group();
+            leavesGroup.position.y = 13.5;
+            // Gövde eğimine uydur
+            leavesGroup.rotation.z = trunk.rotation.z;
+
+            // Yaprak Geometrisi Oluşturma (Bükülmüş Plane)
+            // Geniş başlayıp uca doğru daralan, aşağı bükülen bir yapı
+            const numLeaves = 10;
+            
+            for(let i=0; i<numLeaves; i++) {
+                // Her yaprak için bir grup
+                const leafWrapper = new THREE.Group();
+                const angle = (i / numLeaves) * Math.PI * 2;
+                leafWrapper.rotation.y = angle;
+                
+                // Yaprak parçası: Uzun bir plane
+                // Segment sayısı bükmek için önemli
+                const leafGeo = new THREE.PlaneGeometry(1.8, 8, 2, 8);
+                
+                // Vertices manipülasyonu ile bükme (Curve)
+                const posAttribute = leafGeo.attributes.position;
+                for (let v = 0; v < posAttribute.count; v++) {
+                    const py = posAttribute.getY(v); // Y ekseni boyunca uzunluk
+                    // Plane merkezi 0,0. Y: -4 ile +4 arası
+                    // Biz bunu kökten uca (0'dan 8'e) gibi düşünelim
+                    
+                    // Pivot noktasını ayarlamak yerine geometiyi kaydıracağız ama önce bükelim
+                    // Y değeri arttıkça (uca gittikçe) Z ekseninde aşağı düşsün (kıvrım)
+                    
+                    // Önce koordinat sistemini kaydır: Taban 0, uç 8 olsun
+                    const relativeY = py + 4; 
+                    
+                    // Bükme formülü: Parabolik düşüş
+                    const drop = Math.pow(relativeY * 0.25, 2.5); 
+                    
+                    posAttribute.setZ(v, -drop); // Arkaya doğru bük
+                }
+                leafGeo.computeVertexNormals();
+
                 const leaf = new THREE.Mesh(leafGeo, leafMat);
-                leaf.position.y = 15;
-                leaf.rotation.x = -Math.PI / 4;
-                leaf.rotation.y = i * (Math.PI / 4);
+                // Yaprağı konumlandır: Kökü merkeze, ucu dışarı
+                leaf.rotation.x = -Math.PI / 2; // Yatay hale getir
+                leaf.position.z = 4; // Kök merkezde olacak şekilde ileri it (yarısı kadar)
+                leaf.castShadow = true;
                 
-                leaf.position.x += Math.cos(leaf.rotation.y) * 1.0; 
-                leaf.position.z += Math.sin(leaf.rotation.y) * 1.0;
-                leaf.rotation.z += (Math.random() - 0.5) * 0.2;
-                
-                group.add(leaf);
+                leafWrapper.add(leaf);
+                leavesGroup.add(leafWrapper);
             }
+            
+            group.add(leavesGroup);
             
             const groundY = getTerrainHeight(x, z);
             group.position.set(x, groundY, z);
@@ -767,7 +813,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
         }
 
 
-        // --- WEAPON & ENEMY MODELS ---
+        // --- WEAPON & ENEMY MODELS (FIXED: Alignment) ---
         function createWeapon() {
             gunMesh = new THREE.Group();
             const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.3, metalness: 0.9 });
@@ -777,10 +823,19 @@ document.getElementById('start-btn').addEventListener('click', () => {
             receiver.position.set(0, 0, 0);
             gunMesh.add(receiver);
 
+            // Namlu (Yatık silindir)
             const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.8), blackMat);
             barrel.rotation.x = Math.PI/2; 
             barrel.position.set(0, 0.05, -1.5); 
             receiver.add(barrel);
+            
+            // --- DÜZELTME: SUSTURUCU ---
+            // Namlu zaten döndürülmüş olduğu için (X=90), çocuğu olan susturucuyu tekrar döndürmeye gerek yok.
+            // Sadece Y ekseninde (namlunun kendi ekseni) ileriye taşımamız yeterli.
+            const silencer = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.6, 16), blackMat);
+            // Rotasyon İPTAL EDİLDİ: silencer.rotation.x = Math.PI / 2; -> YANLIŞTI
+            silencer.position.set(0, 1.1, 0); // Namlunun ucuna (local Y+)
+            barrel.add(silencer);
             
             const handguard = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.25, 1.0), greyMat);
             handguard.position.set(0, 0.05, -0.5);
@@ -795,13 +850,50 @@ document.getElementById('start-btn').addEventListener('click', () => {
             mag.rotation.x = 0.15; 
             receiver.add(mag);
 
-            const sight = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.2), blackMat);
-            sight.position.set(0, 0.18, -0.4);
-            receiver.add(sight);
+            // --- DÜZELTME: HOLO SIGHT ---
+            // Yüksekliği ve konumu ayarlandı, daha "gömülü" değil "üstte" duracak
+            const holoGroup = new THREE.Group();
+            holoGroup.position.set(0, 0.2, -0.3); // Receiver üzerinde, biraz daha önde
 
+            // Taban
+            const holoBase = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.2), blackMat);
+            holoGroup.add(holoBase);
+
+            // Çerçeve (Lens tutucu) - U harfi gibi
+            const frameGeo = new THREE.BoxGeometry(0.12, 0.15, 0.02);
+            const frame = new THREE.Mesh(frameGeo, blackMat);
+            frame.position.set(0, 0.1, 0.08); // Arka çerçeve
+            holoGroup.add(frame);
+            
+            const frameFront = new THREE.Mesh(frameGeo, blackMat);
+            frameFront.position.set(0, 0.1, -0.08); // Ön çerçeve
+            holoGroup.add(frameFront);
+
+            // Üst Koruma
+            const hood = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.18), blackMat);
+            hood.position.set(0, 0.18, 0);
+            holoGroup.add(hood);
+            
+            // Lens
+            const lensGeo = new THREE.PlaneGeometry(0.1, 0.1);
+            const lensMat = new THREE.MeshBasicMaterial({ color: 0x22ff22, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+            const lens = new THREE.Mesh(lensGeo, lensMat);
+            lens.position.set(0, 0.1, 0); // Ortada
+            holoGroup.add(lens);
+
+            // Nokta
+            const dotGeo = new THREE.CircleGeometry(0.005, 8);
+            const dotMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const dot = new THREE.Mesh(dotGeo, dotMat);
+            dot.position.set(0, 0.1, -0.01);
+            holoGroup.add(dot);
+
+            receiver.add(holoGroup);
+
+            // Muzzle flash ışığını susturucunun ucuna taşı
             muzzleLight = new THREE.PointLight(0xffaa00, 0, 10);
-            muzzleLight.position.set(0, 0.1, -2.4); 
-            receiver.add(muzzleLight);
+            muzzleLight.position.set(0, 2.0, 0); // Susturucunun da ucunda (local space of barrel)
+            barrel.add(muzzleLight);
 
             gunMesh.position.copy(HIP_FIRE_POS);
             camera.add(gunMesh);
@@ -952,9 +1044,9 @@ document.getElementById('start-btn').addEventListener('click', () => {
                 muzzleLight.intensity = 15;
                 setTimeout(() => muzzleLight.intensity = 0, 50);
 
-                const recoilKick = isAiming ? 0.1 : 0.3;
+                const recoilKick = isAiming ? 0.05 : 0.2; // Susturucu/Holo ile daha az geri tepme hissi
                 gunMesh.position.z += recoilKick; 
-                gunMesh.rotation.x += isAiming ? 0.03 : 0.08;
+                gunMesh.rotation.x += isAiming ? 0.02 : 0.06;
 
                 raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
                 const intersects = raycaster.intersectObjects(colliders, true); 
