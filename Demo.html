@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stechkom Software Demo v2.3 - Fixed Assets</title>
+    <title>Stechkom Tropical War v3.0 - AK47 & Audio Update</title>
     <style>
-        /* Arayüz ve Stil Güncellemeleri */
+        /* UI and Style Updates */
         body { margin: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; user-select: none; background: #000; }
         
         /* UI Layer */
@@ -32,7 +32,7 @@
         /* ADS State */
         .aiming #crosshair { background: none; }
         .aiming #crosshair::after { width: 10px; height: 10px; border-color: rgba(255, 255, 255, 0.9); }
-        .in-vehicle #crosshair { display: block; opacity: 0.7; } /* Araçta da nişangah görünsün */
+        .in-vehicle #crosshair { display: block; opacity: 0.7; } 
 
 
         /* HUD */
@@ -67,7 +67,7 @@
             color: #fff;
             font-size: 18px;
             font-weight: bold;
-            display: none; /* Varsayılan olarak gizli */
+            display: none; 
         }
         #vehicle-health-bar-container {
             width: 100%; height: 10px; background: rgba(255,255,255,0.3); border-radius: 5px; margin-top: 5px;
@@ -101,7 +101,6 @@
         /* Menu */
         #blocker {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            /* Tropik Mavi/Yeşil Geçiş */
             background: linear-gradient(to bottom, #1E90FF, #3CB371);
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             z-index: 10; pointer-events: auto;
@@ -127,7 +126,6 @@
         
         .btn {
             margin-top: 40px; padding: 15px 50px; font-size: 24px;
-            /* Turuncu/Güneş Batımı Rengi */
             background: #FF9800; color: #fff; border: none; border-radius: 50px;
             cursor: pointer; font-weight: bold; transition: transform 0.2s;
             box-shadow: 0 5px 15px rgba(255, 152, 0, 0.4);
@@ -148,14 +146,13 @@
 
     <div id="ui-layer">
         <div id="crosshair"></div>
-        <div id="score-box">ÖLDÜRME: <span id="score">0</span></div>
+        <div id="score-box">KILLS: <span id="score">0</span></div>
         <div id="health-container"><div id="health-bar"></div></div>
-        <div id="ammo-box">Sınırsız</div>
-        <div id="interaction-prompt">ARACA BİNMEK İÇİN [E] TUŞUNA BASIN</div>
+        <div id="ammo-box">Infinite</div>
+        <div id="interaction-prompt">PRESS [E] TO ENTER VEHICLE</div>
         
-        <!-- Yeni Araç Can Göstergesi -->
         <div id="vehicle-hud">
-            ARAÇ CANI: 
+            VEHICLE HP: 
             <span id="vehicle-health-text">100%</span>
             <div id="vehicle-health-bar-container">
                 <div id="vehicle-health-bar"></div>
@@ -166,10 +163,10 @@
     <div id="blocker">
         <div class="menu-content">
             <h1>STECHKOM TROPICAL WAR</h1>
-            <h2>AMPHIBIOUS ASSAULT V2.3 (Fixed)</h2>
-            <button class="btn" id="start-btn">SAVAŞI BAŞLAT</button>
+            <h2>AMPHIBIOUS ASSAULT V3.0 (AK47 + FX)</h2>
+            <button class="btn" id="start-btn">START BATTLE</button>
             <div style="margin-top:20px; font-size:14px; color:#eee;">
-                [W,A,S,D] Hareket • [SHIFT] Koş • [SPACE] Zıpla • [LMB] Ateş/Araç Silahı • [RMB] Nişan Al • [E] BİN/İN
+                [W,A,S,D] Move • [SHIFT] Run • [SPACE] Jump • [LMB] Shoot • [RMB] Aim • [E] Enter/Exit
             </div>
         </div>
     </div>
@@ -196,11 +193,11 @@
         const velocity = new THREE.Vector3();
         const direction = new THREE.Vector3();
         
-        // Kamera ve Silah Sabitleri
+        // Camera and Gun Constants
         const HIP_FIRE_FOV = 75; 
         const ADS_FOV = 40;      
         const HIP_FIRE_POS = new THREE.Vector3(0.5, -0.6, -1.0); 
-        const ADS_POS = new THREE.Vector3(0, -0.49, -0.4); // ADS pozisyonu      
+        const ADS_POS = new THREE.Vector3(0, -0.42, -0.4); // Adjusted for AK47 iron sights
         
         let score = 0;
         let health = 100;
@@ -208,7 +205,7 @@
         let lastShotTime = 0;
         
         const enemies = [];
-        const deadEnemies = []; // Ölü düşmanlar (Ragdoll)
+        const deadEnemies = [];
         const particles = [];
         const enemyBullets = []; 
         const friendlyBullets = []; 
@@ -224,7 +221,7 @@
         const ENEMY_SPAWN_RATE = 3000;
         const BOAT_SPAWN_RATE = 15000;
         const JEEP_SPAWN_RATE = 18000; 
-        const HELI_SPAWN_RATE = 25000;
+        const HELI_SPAWN_RATE = 20000; // Faster heli spawn
         const ENEMY_SHOOT_RANGE = 40;
         let lastSpawnTime = 0;
         let lastBoatSpawnTime = 0;
@@ -239,11 +236,63 @@
         let waterMesh;
         let generatedTextures = {};
 
+        // --- AUDIO SYSTEM (Simple Synth) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(type) {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const t = audioCtx.currentTime;
+
+            if (type === 'shoot') {
+                // Gunshot: fast decay saw/square
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(800, t);
+                osc.frequency.exponentialRampToValueAtTime(100, t + 0.1);
+                gain.gain.setValueAtTime(0.3, t);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+                osc.start(); osc.stop(t + 0.15);
+                
+                // Add noise for punch (using another osc for simplicity or noise buffer if available, keeping simple)
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+                osc2.type = 'square';
+                osc2.frequency.setValueAtTime(150, t);
+                osc2.frequency.exponentialRampToValueAtTime(40, t + 0.1);
+                gain2.gain.setValueAtTime(0.3, t);
+                gain2.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                osc2.start(); osc2.stop(t + 0.1);
+
+            } else if (type === 'explosion') {
+                // Explosion: Low rumble
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, t);
+                osc.frequency.exponentialRampToValueAtTime(10, t + 0.5);
+                gain.gain.setValueAtTime(1.0, t);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+                osc.start(); osc.stop(t + 0.5);
+            } else if (type === 'hit') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(400, t);
+                osc.frequency.exponentialRampToValueAtTime(100, t + 0.1);
+                gain.gain.setValueAtTime(0.2, t);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                osc.start(); osc.stop(t + 0.1);
+            }
+        }
+
 
         init();
         animate();
 
-        // --- TEXTURE ENGINE (BRIGHT COLORS) ---
+        // --- TEXTURE ENGINE ---
         function createNoiseTexture(width, height, colorHex1, colorHex2) {
             const canvas = document.createElement('canvas');
             canvas.width = width;
@@ -268,22 +317,19 @@
             return tex;
         }
 
-        // --- PALM TREE MODEL (REWORKED: Big Lush Leaves) ---
+        // --- PALM TREE ---
         function createPalmTree(x, z) {
             const group = new THREE.Group();
             
-            // Gövde
             const trunkGeo = new THREE.CylinderGeometry(0.7, 1.1, 14, 8);
             const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 });
             const trunk = new THREE.Mesh(trunkGeo, trunkMat);
             trunk.position.y = 7;
-            // Hafif eğim
             trunk.rotation.z = (Math.random() - 0.5) * 0.3;
             trunk.castShadow = true;
             trunk.receiveShadow = true;
             group.add(trunk);
             
-            // Yapraklar (Bütünleşik ve Kıvrımlı Plane)
             const leafColor = 0x228B22;
             const leafMat = new THREE.MeshStandardMaterial({ 
                 color: leafColor, 
@@ -293,47 +339,28 @@
             
             const leavesGroup = new THREE.Group();
             leavesGroup.position.y = 13.5;
-            // Gövde eğimine uydur
             leavesGroup.rotation.z = trunk.rotation.z;
 
-            // Yaprak Geometrisi Oluşturma (Bükülmüş Plane)
-            // Geniş başlayıp uca doğru daralan, aşağı bükülen bir yapı
             const numLeaves = 10;
             
             for(let i=0; i<numLeaves; i++) {
-                // Her yaprak için bir grup
                 const leafWrapper = new THREE.Group();
                 const angle = (i / numLeaves) * Math.PI * 2;
                 leafWrapper.rotation.y = angle;
                 
-                // Yaprak parçası: Uzun bir plane
-                // Segment sayısı bükmek için önemli
                 const leafGeo = new THREE.PlaneGeometry(1.8, 8, 2, 8);
-                
-                // Vertices manipülasyonu ile bükme (Curve)
                 const posAttribute = leafGeo.attributes.position;
                 for (let v = 0; v < posAttribute.count; v++) {
-                    const py = posAttribute.getY(v); // Y ekseni boyunca uzunluk
-                    // Plane merkezi 0,0. Y: -4 ile +4 arası
-                    // Biz bunu kökten uca (0'dan 8'e) gibi düşünelim
-                    
-                    // Pivot noktasını ayarlamak yerine geometiyi kaydıracağız ama önce bükelim
-                    // Y değeri arttıkça (uca gittikçe) Z ekseninde aşağı düşsün (kıvrım)
-                    
-                    // Önce koordinat sistemini kaydır: Taban 0, uç 8 olsun
+                    const py = posAttribute.getY(v);
                     const relativeY = py + 4; 
-                    
-                    // Bükme formülü: Parabolik düşüş
                     const drop = Math.pow(relativeY * 0.25, 2.5); 
-                    
-                    posAttribute.setZ(v, -drop); // Arkaya doğru bük
+                    posAttribute.setZ(v, -drop);
                 }
                 leafGeo.computeVertexNormals();
 
                 const leaf = new THREE.Mesh(leafGeo, leafMat);
-                // Yaprağı konumlandır: Kökü merkeze, ucu dışarı
-                leaf.rotation.x = -Math.PI / 2; // Yatay hale getir
-                leaf.position.z = 4; // Kök merkezde olacak şekilde ileri it (yarısı kadar)
+                leaf.rotation.x = -Math.PI / 2; 
+                leaf.position.z = 4;
                 leaf.castShadow = true;
                 
                 leafWrapper.add(leaf);
@@ -350,7 +377,7 @@
             colliders.push(trunk); 
         }
         
-        // --- DÜŞMAN SALDIRI BOTU MODELİ ---
+        // --- VEHICLES ---
         function createAttackBoat(x, z) {
             const group = new THREE.Group();
             const boatMat = new THREE.MeshStandardMaterial({ color: 0x808080, roughness: 0.8, metalness: 0.2 });
@@ -400,7 +427,6 @@
             colliders.push(hull); 
         }
         
-        // --- DÜŞMAN DEVRİYE ARACI (JEEP) ---
         function createJeep(x, z) {
             const group = new THREE.Group();
             const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2E8B57, roughness: 0.7 }); 
@@ -465,7 +491,7 @@
                 lastShotTime: 0,
                 turret: turret,
                 barrel: barrel,
-                driverSeat: new THREE.Vector3(0, 3.5, 0), // Kamera biraz daha yukarıda
+                driverSeat: new THREE.Vector3(0, 3.5, 0), 
                 velocity: new THREE.Vector3(0, 0, 0)
             };
             
@@ -474,41 +500,49 @@
             colliders.push(chassis); 
         }
 
-        // --- DÜŞMAN HELİKOPTER MODELİ ---
         function createHelicopter(x, z) {
             const group = new THREE.Group();
             const bodyMat = new THREE.MeshStandardMaterial({ color: 0x303030, roughness: 0.5 }); 
             const rotorMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
 
-            const bodyGeo = new THREE.BoxGeometry(4, 2, 10);
+            const bodyGeo = new THREE.BoxGeometry(4, 3, 8); // Slightly bigger body
             const body = new THREE.Mesh(bodyGeo, bodyMat);
             body.castShadow = true;
             group.add(body);
 
-            const tail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 5), bodyMat);
-            tail.position.set(0, 1, 7.5);
+            const tail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 6), bodyMat);
+            tail.position.set(0, 0, 7);
             body.add(tail);
+            
+            const tailRotor = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.5, 0.1), rotorMat);
+            tailRotor.position.set(0.3, 0, 3);
+            tail.add(tailRotor);
 
             const mainRotor = new THREE.Group();
-            const bladeGeo = new THREE.BoxGeometry(0.5, 0.1, 10);
+            const bladeGeo = new THREE.BoxGeometry(0.5, 0.1, 12);
             const blade1 = new THREE.Mesh(bladeGeo, rotorMat); blade1.position.y = 0.1; mainRotor.add(blade1);
             const blade2 = new THREE.Mesh(bladeGeo, rotorMat); blade2.rotation.y = Math.PI/2; blade2.position.y = 0.1; mainRotor.add(blade2);
             
-            mainRotor.position.set(0, 1.5, -2);
+            mainRotor.position.set(0, 1.8, 0);
             body.add(mainRotor);
 
-            group.position.set(x, 150, z);
-            group.rotation.y = Math.random() * Math.PI * 2;
+            // Guns under wings
+            const wing = new THREE.Mesh(new THREE.BoxGeometry(6, 0.2, 1.5), bodyMat);
+            wing.position.set(0, -0.5, 1);
+            body.add(wing);
+
+            group.position.set(x, 100, z); // Start high
             
             group.userData = {
                 type: 'helicopter',
-                hp: 800,
-                maxHp: 800, 
-                speed: 5,
+                hp: 600,
+                maxHp: 600, 
+                speed: 15, // Increased speed
                 rotor: mainRotor,
+                tailRotor: tailRotor,
                 lastShotTime: 0,
-                targetY: 150 + Math.random() * 50, 
-                gunOffset: new THREE.Vector3(2, 0, -5) 
+                targetY: 60 + Math.random() * 20, // Fly lower
+                gunOffset: new THREE.Vector3(0, -1, 3) 
             };
             
             scene.add(group);
@@ -516,7 +550,7 @@
             colliders.push(body); 
         }
         
-        // --- INIT & LIGHTING (TROPIC) ---
+        // --- INIT & LIGHTING ---
         function init() {
             scene = new THREE.Scene();
             scene.fog = new THREE.FogExp2(0xaaddff, 0.002);
@@ -569,7 +603,7 @@
 
             createWater();
             createTerrain();
-            createWeapon();
+            createAK47(); // UPDATED FUNCTION
             
             for(let i=0; i<30; i++) {
                 let x, z;
@@ -582,22 +616,16 @@
 
             controls = new PointerLockControls(camera, document.body);
             const blocker = document.getElementById('blocker');
-            // START BUTTON: pointer lock dene; olmazsa yeni sekmede aç
-document.getElementById('start-btn').addEventListener('click', () => {
-    try {
-        controls.lock();
-
-        // 300 ms sonra hala kilitlenmediyse (iframe engellediyse) yeni sekme aç
-        setTimeout(() => {
-            if (!controls.isLocked) {
-                window.open(window.location.href, '_blank');
-            }
-        }, 300);
-    } catch (e) {
-        // Direkt hata verdiyse de yeni sekme aç
-        window.open(window.location.href, '_blank');
-    }
-});
+            
+            document.getElementById('start-btn').addEventListener('click', () => {
+                try {
+                    controls.lock();
+                    setTimeout(() => { if (!controls.isLocked) window.open(window.location.href, '_blank'); }, 300);
+                } catch (e) { window.open(window.location.href, '_blank'); }
+                
+                // Init audio context on user interaction
+                if(audioCtx.state === 'suspended') audioCtx.resume();
+            });
 
             controls.addEventListener('lock', () => { 
                 blocker.style.display = 'none'; 
@@ -629,7 +657,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
             document.addEventListener('mousedown', (e) => {
                 if(!controls.isLocked) return;
                 if(e.button === 0) shoot(); 
-                if(e.button === 2) { // Araçtayken de nişan alma çalışsın
+                if(e.button === 2) { 
                     isAiming = true;
                     document.getElementById('ui-layer').classList.add('aiming');
                 }
@@ -666,41 +694,28 @@ document.getElementById('start-btn').addEventListener('click', () => {
         function enterVehicle(vehicle) {
             currentVehicle = vehicle;
             currentVehicle.userData.isOccupied = true;
-            
             controls.getObject().visible = false;
             gunMesh.visible = false;
-            
-            // Kamerayı araca yerleştir
             camera.position.copy(currentVehicle.position).add(currentVehicle.userData.driverSeat);
-            
-            // PointerLock hala aktif ama biz manuel update yapacağız
-            
             document.getElementById('ui-layer').classList.add('in-vehicle');
             document.getElementById('vehicle-hud').style.display = 'block';
             document.getElementById('health-container').style.display = 'none';
             document.getElementById('ammo-box').style.display = 'none';
-            // Crosshair araçta kalsın
-            // document.getElementById('crosshair').style.display = 'none'; 
             document.getElementById('interaction-prompt').style.display = 'none';
         }
         
         function exitVehicle() {
             if(!currentVehicle) return;
-            
             const exitPoint = currentVehicle.position.clone();
             const side = new THREE.Vector3(1, 0, 0).applyQuaternion(currentVehicle.quaternion);
             exitPoint.add(side.multiplyScalar(5));
             exitPoint.y = getTerrainHeight(exitPoint.x, exitPoint.z) + 3.0;
-            
             controls.getObject().position.copy(exitPoint);
-            controls.getObject().rotation.set(0, 0, 0); // Rotasyonu sıfırla ki kafa karışmasın
-            
+            controls.getObject().rotation.set(0, 0, 0); 
             controls.getObject().visible = true;
             gunMesh.visible = true;
-            
             currentVehicle.userData.isOccupied = false;
             currentVehicle = null;
-            
             document.getElementById('ui-layer').classList.remove('in-vehicle');
             document.getElementById('vehicle-hud').style.display = 'none';
             document.getElementById('health-container').style.display = 'block';
@@ -714,7 +729,6 @@ document.getElementById('start-btn').addEventListener('click', () => {
             const h1 = (Math.sin(x * scale1) * Math.cos(z * scale1)) * 10;
             const dist = Math.sqrt(x*x + z*z);
             const islandShape = 40 * Math.exp(-0.00002 * dist * dist); 
-            
             let y = islandShape + h1 - 12; 
             return Math.max(y, WATER_LEVEL - 5);
         }
@@ -784,7 +798,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
             scene.add(waterMesh);
         }
 
-        // --- BULLET UTILITY FUNCTION ---
+        // --- BULLET UTILITY ---
         function createBullet(startPos, targetPos, isFriendly = false, isHeavy = false) {
             const bulletGeo = new THREE.SphereGeometry(isHeavy ? 0.3 : 0.15, 8, 8);
             const bulletMat = new THREE.MeshBasicMaterial({ color: isHeavy ? (isFriendly ? 0x00ff00 : 0xff0000) : 0xffff00 }); 
@@ -793,106 +807,86 @@ document.getElementById('start-btn').addEventListener('click', () => {
             bullet.position.copy(startPos);
 
             const dir = new THREE.Vector3().subVectors(targetPos, bullet.position).normalize();
-            
             dir.x += (Math.random() - 0.5) * (isHeavy ? 0.02 : 0.05);
             dir.y += (Math.random() - 0.5) * (isHeavy ? 0.02 : 0.05);
             dir.z += (Math.random() - 0.5) * (isHeavy ? 0.02 : 0.05);
             
             bullet.userData = { 
-                velocity: dir.multiplyScalar(isHeavy ? 100 : 40), 
+                velocity: dir.multiplyScalar(isHeavy ? 100 : 80), // Faster bullets
                 isFriendly: isFriendly,
                 isHeavy: isHeavy
             };
             
             scene.add(bullet);
-            if (isFriendly) {
-                friendlyBullets.push(bullet);
-            } else {
-                enemyBullets.push(bullet);
-            }
+            if (isFriendly) friendlyBullets.push(bullet);
+            else enemyBullets.push(bullet);
         }
 
 
-        // --- WEAPON & ENEMY MODELS (FIXED: Alignment) ---
-        function createWeapon() {
+        // --- WEAPON: AK-47 ---
+        function createAK47() {
             gunMesh = new THREE.Group();
-            const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.3, metalness: 0.9 });
-            const greyMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.5, metalness: 0.6 });
             
-            const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.3, 1.2), greyMat);
-            receiver.position.set(0, 0, 0);
+            // Materials
+            const woodMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.6 });
+            const metalMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.3, metalness: 0.8 });
+            
+            // 1. Receiver (Main body)
+            const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.25, 1.0), metalMat);
             gunMesh.add(receiver);
+            
+            // 2. Stock (Wooden buttstock)
+            const stock = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.3, 0.8), woodMat);
+            stock.position.set(0, -0.1, 0.8);
+            stock.rotation.x = -0.2; // Angled down
+            receiver.add(stock);
 
-            // Namlu (Yatık silindir)
-            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.8), blackMat);
-            barrel.rotation.x = Math.PI/2; 
-            barrel.position.set(0, 0.05, -1.5); 
+            // 3. Pistol Grip
+            const grip = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.4, 0.2), woodMat);
+            grip.position.set(0, -0.35, 0.3);
+            grip.rotation.x = -0.3;
+            receiver.add(grip);
+
+            // 4. Barrel
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.0, 8), metalMat);
+            barrel.rotation.x = Math.PI/2;
+            barrel.position.set(0, 0.05, -1.2);
             receiver.add(barrel);
-            
-            // --- DÜZELTME: SUSTURUCU ---
-            // Namlu zaten döndürülmüş olduğu için (X=90), çocuğu olan susturucuyu tekrar döndürmeye gerek yok.
-            // Sadece Y ekseninde (namlunun kendi ekseni) ileriye taşımamız yeterli.
-            const silencer = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.6, 16), blackMat);
-            // Rotasyon İPTAL EDİLDİ: silencer.rotation.x = Math.PI / 2; -> YANLIŞTI
-            silencer.position.set(0, 1.1, 0); // Namlunun ucuna (local Y+)
-            barrel.add(silencer);
-            
-            const handguard = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.25, 1.0), greyMat);
-            handguard.position.set(0, 0.05, -0.5);
+
+            // 5. Gas Tube (Top of barrel)
+            const gasTube = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.0, 8), metalMat);
+            gasTube.rotation.x = Math.PI/2;
+            gasTube.position.set(0, 0.15, -0.8);
+            receiver.add(gasTube);
+
+            // 6. Handguard (Wood)
+            const handguard = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.25, 0.8), woodMat);
+            handguard.position.set(0, 0, -0.7);
             receiver.add(handguard);
 
-            const stock = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.2, 0.7), blackMat);
-            stock.position.set(0, 0, 0.8);
-            receiver.add(stock);
+            // 7. Magazine (Curved Banana Style - Simulated with 2 segments)
+            const magTop = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.25), metalMat);
+            magTop.position.set(0, -0.3, -0.1);
+            magTop.rotation.x = 0.2;
+            receiver.add(magTop);
             
-            const mag = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.6, 0.25), blackMat);
-            mag.position.set(0, -0.35, 0.2); 
-            mag.rotation.x = 0.15; 
-            receiver.add(mag);
+            const magBot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.22), metalMat);
+            magBot.position.set(0, -0.4, 0.05); // Offset to curve
+            magBot.rotation.x = 0.5; // More curve
+            magTop.add(magBot);
 
-            // --- DÜZELTME: HOLO SIGHT ---
-            // Yüksekliği ve konumu ayarlandı, daha "gömülü" değil "üstte" duracak
-            const holoGroup = new THREE.Group();
-            holoGroup.position.set(0, 0.2, -0.3); // Receiver üzerinde, biraz daha önde
+            // 8. Iron Sights
+            const rearSight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.2), metalMat);
+            rearSight.position.set(0, 0.2, -0.2);
+            receiver.add(rearSight);
 
-            // Taban
-            const holoBase = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.2), blackMat);
-            holoGroup.add(holoBase);
+            const frontSight = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.15, 0.05), metalMat);
+            frontSight.position.set(0, 0.15, -1.8);
+            receiver.add(frontSight);
 
-            // Çerçeve (Lens tutucu) - U harfi gibi
-            const frameGeo = new THREE.BoxGeometry(0.12, 0.15, 0.02);
-            const frame = new THREE.Mesh(frameGeo, blackMat);
-            frame.position.set(0, 0.1, 0.08); // Arka çerçeve
-            holoGroup.add(frame);
-            
-            const frameFront = new THREE.Mesh(frameGeo, blackMat);
-            frameFront.position.set(0, 0.1, -0.08); // Ön çerçeve
-            holoGroup.add(frameFront);
-
-            // Üst Koruma
-            const hood = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.18), blackMat);
-            hood.position.set(0, 0.18, 0);
-            holoGroup.add(hood);
-            
-            // Lens
-            const lensGeo = new THREE.PlaneGeometry(0.1, 0.1);
-            const lensMat = new THREE.MeshBasicMaterial({ color: 0x22ff22, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
-            const lens = new THREE.Mesh(lensGeo, lensMat);
-            lens.position.set(0, 0.1, 0); // Ortada
-            holoGroup.add(lens);
-
-            // Nokta
-            const dotGeo = new THREE.CircleGeometry(0.005, 8);
-            const dotMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-            const dot = new THREE.Mesh(dotGeo, dotMat);
-            dot.position.set(0, 0.1, -0.01);
-            holoGroup.add(dot);
-
-            receiver.add(holoGroup);
-
-            // Muzzle flash ışığını susturucunun ucuna taşı
+            // Muzzle Flash
             muzzleLight = new THREE.PointLight(0xffaa00, 0, 10);
-            muzzleLight.position.set(0, 2.0, 0); // Susturucunun da ucunda (local space of barrel)
+            muzzleLight.position.set(0, 1.2, 0); 
             barrel.add(muzzleLight);
 
             gunMesh.position.copy(HIP_FIRE_POS);
@@ -971,10 +965,33 @@ document.getElementById('start-btn').addEventListener('click', () => {
             torso.userData.parentGroup = group;
         }
 
-        // --- BULLET & DAMAGE FUNCTIONS ---
-        
+        // --- EXPLOSION & DAMAGE ---
+        function createExplosion(pos) {
+            playSound('explosion');
+            
+            // Fireball
+            for(let i=0; i<30; i++) {
+                const p = new THREE.Mesh(new THREE.BoxGeometry(1.5,1.5,1.5), new THREE.MeshBasicMaterial({color: 0xff4500}));
+                p.position.copy(pos);
+                p.userData.vel = new THREE.Vector3((Math.random()-0.5)*30, Math.random()*30, (Math.random()-0.5)*30);
+                p.userData.age = 0;
+                scene.add(p);
+                particles.push(p);
+            }
+            // Smoke
+            for(let i=0; i<20; i++) {
+                const p = new THREE.Mesh(new THREE.BoxGeometry(2,2,2), new THREE.MeshBasicMaterial({color: 0x555555}));
+                p.position.copy(pos);
+                p.userData.vel = new THREE.Vector3((Math.random()-0.5)*15, Math.random()*20 + 10, (Math.random()-0.5)*15);
+                p.userData.age = 0;
+                scene.add(p);
+                particles.push(p);
+            }
+        }
+
         function takeVehicleDamage(vehicle, damage) {
             vehicle.userData.hp -= damage;
+            playSound('hit');
             if(vehicle.userData.hp < 0) vehicle.userData.hp = 0;
             
             if (currentVehicle === vehicle) {
@@ -982,7 +999,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
             }
 
             if(vehicle.userData.hp <= 0) {
-                createBloodEffect(vehicle.position.clone().add(new THREE.Vector3(0, 5, 0)), 100, 0xff0000);
+                createExplosion(vehicle.position); // EFFECT
                 
                 if(currentVehicle === vehicle) {
                     exitVehicle(); 
@@ -999,22 +1016,18 @@ document.getElementById('start-btn').addEventListener('click', () => {
             const now = performance.now();
             
             if (currentVehicle) {
-                // Araç Silahı (Dost Ateşi)
+                // Vehicle Weapon
                 const fireRate = 150;
                 if(now - lastShotTime < fireRate) return;
                 lastShotTime = now;
+                playSound('shoot');
                 
                 const turret = currentVehicle.userData.turret;
                 const barrel = currentVehicle.userData.barrel;
                 const worldPos = new THREE.Vector3();
                 barrel.getWorldPosition(worldPos);
                 
-                // --- ARAÇTAN NİŞAN ALMA MANTIĞI DÜZELTİLDİ ---
-                // Kameranın baktığı yere raycast at, turret oraya dönsün, mermi oraya gitsin
                 raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
-                // Kendi aracımızı raycast'ten hariç tutmamız gerek ama colliderlar listesinde ise sorun olabilir.
-                // En basiti, raycaster'ı uzak bir noktaya atmak.
-                
                 let targetPoint = new THREE.Vector3();
                 const intersects = raycaster.intersectObjects(colliders.filter(c => c !== currentVehicle), true); 
                 
@@ -1024,27 +1037,26 @@ document.getElementById('start-btn').addEventListener('click', () => {
                     targetPoint = raycaster.ray.at(500, targetPoint);
                 }
 
-                // Turret'i hedefe çevir (Sadece Y ekseninde değil, topyekün bakabilir veya kısıtlanabilir)
-                // Basitlik için turret hedefe baksın
                 turret.lookAt(targetPoint);
                 
                 createBullet(worldPos, targetPoint, true, true); 
                 
                 if(turret) {
-                    turret.rotateX(0.2); // Geri tepme
+                    turret.rotateX(0.2); 
                     setTimeout(() => turret.rotateX(-0.2), 100);
                 }
 
             } else {
-                // Oyuncu Silahı (Raycast)
-                const fireRate = isAiming ? 150 : 100; 
+                // AK-47
+                const fireRate = 100; // Automatic
                 if(now - lastShotTime < fireRate) return;
                 lastShotTime = now;
+                playSound('shoot');
 
                 muzzleLight.intensity = 15;
                 setTimeout(() => muzzleLight.intensity = 0, 50);
 
-                const recoilKick = isAiming ? 0.05 : 0.2; // Susturucu/Holo ile daha az geri tepme hissi
+                const recoilKick = isAiming ? 0.05 : 0.2; 
                 gunMesh.position.z += recoilKick; 
                 gunMesh.rotation.x += isAiming ? 0.02 : 0.06;
 
@@ -1067,7 +1079,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
                             takeVehicleDamage(targetGroup, isAiming ? 50 : 35); 
                             createBloodEffect(intersects[0].point, 10, 0x808080); 
                         } else {
-                            // Piyade Hasarı
+                            playSound('hit');
                             const knockbackDir = new THREE.Vector3().subVectors(targetGroup.position, camera.position).normalize();
                             targetGroup.userData.velocity.add(knockbackDir.multiplyScalar(5));
                             targetGroup.userData.velocity.y += 3; 
@@ -1076,25 +1088,16 @@ document.getElementById('start-btn').addEventListener('click', () => {
                             targetGroup.userData.hp -= isAiming ? 50 : 35; 
                             
                             if(targetGroup.userData.hp <= 0) {
-                                // --- RAGDOLL / ÖLÜM EFEKTİ ---
                                 createBloodEffect(targetGroup.position.clone().add(new THREE.Vector3(0, 1.5, 0)), 80);
-                                
-                                // Collider'ı kaldır
                                 const torsoIndex = colliders.indexOf(hitObj);
                                 if (torsoIndex > -1) { colliders.splice(torsoIndex, 1); }
-
-                                // Listeden çıkar, ölüler listesine ekle
                                 enemies.splice(enemies.indexOf(targetGroup), 1);
                                 deadEnemies.push({ mesh: targetGroup, deathTime: now });
-
-                                // Ragdoll hareketi: Geriye/Yana yatır
-                                targetGroup.rotation.x = -Math.PI / 2; // Yere yat
-                                targetGroup.position.y -= 1.0; // Biraz aşağı indir
-
+                                targetGroup.rotation.x = -Math.PI / 2;
+                                targetGroup.position.y -= 1.0;
                                 score++;
                                 enemiesKilledTotal++;
                                 document.getElementById('score').innerText = score;
-
                                 if (enemiesKilledTotal % 5 === 0) {
                                     maxEnemies++;
                                 }
@@ -1119,6 +1122,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
         function takeDamage(damage = 10) {
             if(isGameOver) return;
             health -= damage; 
+            playSound('hit');
             if(health < 0) health = 0;
             document.getElementById('health-bar').style.width = health + '%';
             
@@ -1128,7 +1132,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
             if(health <= 0) {
                 isGameOver = true;
                 controls.unlock();
-                document.querySelector('h1').innerText = "ÖLDÜN!";
+                document.querySelector('h1').innerText = "YOU DIED!";
                 document.getElementById('interaction-prompt').style.display = 'none';
             }
         }
@@ -1137,6 +1141,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
             health = 100; score = 0; isGameOver = false; maxEnemies = 5; enemiesKilledTotal = 0;
             document.getElementById('health-bar').style.width = '100%';
             document.getElementById('score').innerText = '0';
+            document.querySelector('h1').innerText = "STECHKOM TROPICAL WAR";
             enemies.forEach(e => scene.remove(e)); enemies.length = 0; 
             deadEnemies.forEach(d => scene.remove(d.mesh)); deadEnemies.length = 0;
             colliders.length = 0;
@@ -1177,7 +1182,6 @@ document.getElementById('start-btn').addEventListener('click', () => {
                 // Vehicle Control
                 updateVehicleHUD(currentVehicle);
 
-                // Vehicle Input
                 vehicleMove.set(0, 0, 0);
                 if (moveForward) vehicleMove.z -= 1;
                 if (moveBackward) vehicleMove.z += 1;
@@ -1191,15 +1195,12 @@ document.getElementById('start-btn').addEventListener('click', () => {
                 const groundH = getTerrainHeight(nextPos.x, nextPos.z);
                 
                 if (currentVehicle.userData.type === 'jeep') {
-                    // --- JEEP FİZİK DÜZELTMESİ ---
                     if (groundH < WATER_LEVEL) {
-                        // Suya girmesin
+                        // Avoid water
                     } else {
                          currentVehicle.position.copy(nextPos);
-                         // Yere sıkı yapışma (Havada uçmayı engelleme)
                          currentVehicle.position.y = getTerrainHeight(currentVehicle.position.x, currentVehicle.position.z) + 1.0; 
                          
-                         // Eğim
                          const frontPos = nextPos.clone().add(forward.clone().multiplyScalar(2));
                          const backPos = nextPos.clone().sub(forward.clone().multiplyScalar(2));
                          const h1 = getTerrainHeight(frontPos.x, frontPos.z);
@@ -1208,7 +1209,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
                     }
                 } else if (currentVehicle.userData.type === 'boat') {
                     if (groundH > WATER_LEVEL + 0.5) {
-                        // Karaya çıkmasın
+                        // Avoid land
                     } else {
                         currentVehicle.position.copy(nextPos);
                         currentVehicle.rotation.z = Math.sin(time * 0.005) * 0.05;
@@ -1216,10 +1217,8 @@ document.getElementById('start-btn').addEventListener('click', () => {
                     }
                 }
 
-                // Kamerayı araca sabitle ama rotasyon serbest kalsın (PointerLock kontrol ediyor)
                 camera.position.copy(currentVehicle.position).add(currentVehicle.userData.driverSeat.clone().applyQuaternion(currentVehicle.quaternion));
                 
-                // Turret'i nişan alınan yere çevir (Görsel geri bildirim için)
                 raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
                 let targetPoint = raycaster.ray.at(100, new THREE.Vector3());
                 const intersects = raycaster.intersectObjects(colliders, true);
@@ -1288,7 +1287,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
                 gunMesh.position.z = THREE.MathUtils.lerp(gunMesh.position.z, targetZ, 0.15);
             }
 
-            // --- WATER MOVEMENT ---
+            // --- WATER ---
             if(waterMesh) {
                 generatedTextures.water.offset.x += delta * 0.01; 
                 generatedTextures.water.offset.y += delta * 0.005; 
@@ -1310,7 +1309,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
                 createJeep(pPos.x, pPos.z); lastJeepSpawnTime = time;
             }
             
-            if(time - lastHeliSpawnTime > HELI_SPAWN_RATE && vehicles.filter(v => v.userData.type === 'helicopter').length < 1) {
+            if(time - lastHeliSpawnTime > HELI_SPAWN_RATE && vehicles.filter(v => v.userData.type === 'helicopter').length < 2) {
                 createHelicopter(pPos.x, pPos.z); lastHeliSpawnTime = time;
             }
 
@@ -1351,19 +1350,21 @@ document.getElementById('start-btn').addEventListener('click', () => {
                     if (time - userData.lastShotTime > 2000) { 
                         createBullet(enemy.position.clone().add(new THREE.Vector3(0, 1.5, 0)), pPos, false, false); 
                         userData.lastShotTime = time;
+                        playSound('shoot');
                     }
                 } else {
                     if (time - userData.lastShotTime > 1000) {
                         createBullet(enemy.position.clone().add(new THREE.Vector3(0, 1.5, 0)), pPos, false, false); 
                         userData.lastShotTime = time;
+                        playSound('shoot');
                     }
                 }
             }
 
-            // --- DEAD ENEMIES CLEANUP (RAGDOLL) ---
+            // --- DEAD ENEMIES ---
             for(let i = deadEnemies.length-1; i>=0; i--) {
                 const dead = deadEnemies[i];
-                if (time - dead.deathTime > 2000) { // 2 saniye sonra sil
+                if (time - dead.deathTime > 2000) { 
                     scene.remove(dead.mesh);
                     deadEnemies.splice(i, 1);
                 }
@@ -1374,14 +1375,13 @@ document.getElementById('start-btn').addEventListener('click', () => {
                 const vehicle = vehicles[i];
                 const userData = vehicle.userData;
                 
-                // --- HELIKOPTER PERVANELERİ HER ZAMAN DÖNSÜN ---
                 if (userData.type === 'helicopter') {
-                    userData.rotor.rotation.y += delta * 20; // Hızlı dönme
+                    userData.rotor.rotation.y += delta * 20; 
+                    userData.tailRotor.rotation.x += delta * 20;
                 }
                 
                 if (!userData.isOccupied) {
                     if (userData.type === 'boat') {
-                        // BOAT AI logic... (Aynı kaldı)
                         const forwardDir = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicle.quaternion);
                         const checkPos = vehicle.position.clone().add(forwardDir.multiplyScalar(20));
                         if (getTerrainHeight(checkPos.x, checkPos.z) > WATER_LEVEL) {
@@ -1402,11 +1402,11 @@ document.getElementById('start-btn').addEventListener('click', () => {
                             userData.barrel.getWorldPosition(worldPos);
                             createBullet(worldPos, pPos, false, true); 
                             userData.lastShotTime = time;
+                            playSound('shoot');
                         }
                         userData.turret.lookAt(pPos);
 
                     } else if (userData.type === 'jeep') {
-                        // JEEP AI
                         const groundH = getTerrainHeight(vehicle.position.x, vehicle.position.z);
                         vehicle.position.y = groundH + 1.0;
 
@@ -1435,23 +1435,33 @@ document.getElementById('start-btn').addEventListener('click', () => {
                             userData.barrel.getWorldPosition(worldPos);
                             createBullet(worldPos, pPos, false, true);
                             userData.lastShotTime = time;
+                            playSound('shoot');
                         }
                         userData.turret.lookAt(pPos);
-                    }
-                    
-                } else if (userData.type === 'helicopter') {
-                    // HELICOPTER AI
-                    // Pervane zaten yukarıda dönüyor
-                    const targetAngle = Math.atan2(pPos.x - vehicle.position.x, pPos.z - vehicle.position.z);
-                    vehicle.rotation.y = THREE.MathUtils.lerp(vehicle.rotation.y, targetAngle, 0.01);
-                    vehicle.position.y = THREE.MathUtils.lerp(vehicle.position.y, userData.targetY, 0.01);
-                    vehicle.translateZ(userData.speed * delta);
-                    
-                    const dist = vehicle.position.distanceTo(pPos);
-                    if (dist < 400 && time - userData.lastShotTime > 1500) {
-                        const worldPos = vehicle.position.clone().add(userData.gunOffset);
-                        createBullet(worldPos, pPos, false, true); 
-                        userData.lastShotTime = time;
+
+                    } else if (userData.type === 'helicopter') {
+                        // FIXED HELICOPTER AI
+                        // 1. Look at player (Correctly)
+                        vehicle.lookAt(pPos.x, vehicle.position.y, pPos.z);
+
+                        // 2. Adjust Height
+                        vehicle.position.y = THREE.MathUtils.lerp(vehicle.position.y, userData.targetY, 0.05);
+
+                        // 3. Move closer if far
+                        const dist = vehicle.position.distanceTo(pPos);
+                        if (dist > 150) { // Don't get too close
+                             vehicle.translateZ(userData.speed * delta);
+                        } else {
+                             // Circle or hover? For now just hover and shoot
+                        }
+
+                        // 4. Shoot
+                        if (dist < 500 && time - userData.lastShotTime > 400) { // Rapid fire
+                            const worldPos = vehicle.position.clone().add(new THREE.Vector3(0, -2, 4).applyQuaternion(vehicle.quaternion));
+                            createBullet(worldPos, pPos, false, true); 
+                            userData.lastShotTime = time;
+                            playSound('shoot');
+                        }
                     }
                 }
             }
@@ -1479,21 +1489,16 @@ document.getElementById('start-btn').addEventListener('click', () => {
                             target.userData.hp -= b.userData.isHeavy ? 80 : 40; 
                             createBloodEffect(bulletPos, 40); 
                             target.userData.velocity.y += 5; 
+                            playSound('hit');
                             
                             if(target.userData.hp <= 0) {
-                                // RAGDOLL LOGIC DUPLICATED HERE FOR FRIENDLY FIRE
                                 createBloodEffect(bulletPos, 80);
-                                const torsoIndex = colliders.indexOf(target); // Düşman target bir gruptur, collider değil.
-                                // Piyade için 'target' bir group. Collider ise torso.
-                                // Basitçe:
                                 const tIndex = colliders.findIndex(c => c.userData.parentGroup === target);
                                 if(tIndex > -1) colliders.splice(tIndex, 1);
-
                                 enemies.splice(enemies.indexOf(target), 1);
                                 deadEnemies.push({ mesh: target, deathTime: time });
                                 target.rotation.x = -Math.PI / 2;
                                 target.position.y -= 1.0;
-
                                 score++;
                                 enemiesKilledTotal++;
                                 document.getElementById('score').innerText = score;
